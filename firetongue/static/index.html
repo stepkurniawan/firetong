@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FireTongue MVP</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <div>
+          <h1>FireTongue</h1>
+          <p>Indonesian sermon audio to English translation</p>
+        </div>
+        <div class="status" id="api-status">Loading settings...</div>
+      </header>
+
+      <section class="controls">
+        <label class="key-field">
+          OpenAI API key
+          <input id="api-key" type="password" autocomplete="off" placeholder="sk-..." />
+        </label>
+        <button id="save-key-button">Save key</button>
+        <button id="test-openai-button">Test OpenAI</button>
+        <button id="load-model-button">Load Whisper</button>
+        <button id="capture-button">Capture tab audio</button>
+        <button id="stop-button" disabled>Stop</button>
+        <label>
+          Max chunk seconds
+          <input id="chunk-seconds" type="number" min="2" max="15" value="5" />
+        </label>
+        <div class="meter" aria-label="Audio level">
+          <span id="meter-bar"></span>
+        </div>
+      </section>
+
+      <section class="metrics" aria-label="Runtime metrics">
+        <div>
+          <span>Status</span>
+          <strong id="capture-state">Idle</strong>
+        </div>
+        <div>
+          <span>Phrases</span>
+          <strong id="phrase-count">0</strong>
+        </div>
+        <div>
+          <span>Last latency</span>
+          <strong id="last-latency">-</strong>
+        </div>
+      </section>
+
+      <section class="panels" aria-label="Transcript and translation">
+        <article class="panel">
+          <div class="panel-title">
+            <h2>Indonesian</h2>
+            <button id="translate-button">Translate</button>
+          </div>
+          <textarea id="source-text" placeholder="Transcribed Indonesian text appears here. You can also type text manually."></textarea>
+        </article>
+
+        <article class="panel">
+          <div class="panel-title">
+            <h2>English</h2>
+            <div class="panel-actions">
+              <button id="copy-button">Copy</button>
+              <button id="export-button">Export</button>
+            </div>
+          </div>
+          <textarea id="translated-text" readonly placeholder="English translation appears here."></textarea>
+        </article>
+      </section>
+
+      <p class="log" id="log"></p>
+    </main>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
