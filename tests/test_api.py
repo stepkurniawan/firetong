@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
-from firetongue.main import app
-from firetongue.settings import Settings, get_settings
+from firetong.main import app
+from firetong.settings import Settings, get_settings
 
 
 def override_settings(**values):

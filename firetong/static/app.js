@@ -50,17 +50,17 @@ function recordPhraseLatency(startedAt) {
 }
 
 function savedApiKey() {
-  return localStorage.getItem("firetongue.openai_api_key") || "";
+  return localStorage.getItem("firetong.openai_api_key") || "";
 }
 
 function saveApiKey() {
   const key = apiKeyInput.value.trim();
   if (key) {
-    localStorage.setItem("firetongue.openai_api_key", key);
+    localStorage.setItem("firetong.openai_api_key", key);
     apiStatus.textContent = `Translation ready (${config.translation_model})`;
     setLog("API key saved in this browser.");
   } else {
-    localStorage.removeItem("firetongue.openai_api_key");
+    localStorage.removeItem("firetong.openai_api_key");
     apiStatus.textContent = "Add OpenAI key for translation";
     setLog("API key removed.");
   }
@@ -333,7 +333,7 @@ async function testOpenAIConnection() {
 
 function exportTranscript() {
   const body = [
-    "FireTongue transcript",
+    "FireTong transcript",
     "",
     "Indonesian",
     sourceText.value,
@@ -345,7 +345,7 @@ function exportTranscript() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "firetongue-transcript.txt";
+  link.download = "firetong-transcript.txt";
   link.click();
   URL.revokeObjectURL(url);
   setLog("Exported transcript.");

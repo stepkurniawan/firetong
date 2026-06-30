@@ -1,6 +1,6 @@
-# firetongue
+# firetong
 
-FireTongue MVP: capture shared browser audio, transcribe Indonesian sermon chunks, translate them to English, and display both sides in one browser page.
+FireTong MVP: capture shared browser audio, transcribe Indonesian sermon chunks, translate them to English, and display both sides in one browser page.
 
 ## What is built
 
@@ -16,27 +16,27 @@ FireTongue MVP: capture shared browser audio, transcribe Indonesian sermon chunk
 
 ```bash
 uv sync
-uv run uvicorn firetongue.main:app --reload
+./start.sh
 ```
 
 Open http://127.0.0.1:8000.
 
 In Chrome or Edge, paste your OpenAI API key in the page, click **Test OpenAI**, click **Load Whisper** to warm up the in-browser model, then click **Capture tab audio**, choose the sermon tab, and enable audio sharing. You can also type Indonesian text manually and click **Translate**.
 
-The first transcription can take a while because the browser downloads the Whisper model. After that, FireTongue listens for short pauses and processes each phrase locally before sending only text to OpenAI for translation.
+The first transcription can take a while because the browser downloads the Whisper model. After that, FireTong listens for short pauses and processes each phrase locally before sending only text to OpenAI for translation.
 
 The Python server is only a local static host plus config endpoint. The browser app has built-in defaults, so it can also be hosted as ordinary static files.
 
-FireTongue checks for the browser APIs it needs on load: shared audio capture, `MediaRecorder`, `AudioContext`, and `OfflineAudioContext`.
+FireTong checks for the browser APIs it needs on load: shared audio capture, `MediaRecorder`, `AudioContext`, and `OfflineAudioContext`.
 
 ## Settings
 
-Environment variables use the `FIRETONGUE_` prefix:
+Environment variables use the `FIRETONG_` prefix:
 
-- `FIRETONGUE_OPENAI_BASE_URL` default: `https://api.openai.com/v1`
-- `FIRETONGUE_TRANSLATION_MODEL` default: `gpt-4o-mini`
-- `FIRETONGUE_TRANSCRIPTION_MODEL` default: `Xenova/whisper-tiny`
-- `FIRETONGUE_CHUNK_SECONDS` default: `5`
+- `FIRETONG_OPENAI_BASE_URL` default: `https://api.openai.com/v1`
+- `FIRETONG_TRANSLATION_MODEL` default: `gpt-4o-mini`
+- `FIRETONG_TRANSCRIPTION_MODEL` default: `Xenova/whisper-tiny`
+- `FIRETONG_CHUNK_SECONDS` default: `5`
 
 ## Test
 
@@ -58,4 +58,4 @@ Expected pass criteria:
 - The English panel appends a matching translation.
 - `Phrases` increments after each pause.
 - `Last latency` updates after each translated phrase.
-- **Export** downloads `firetongue-transcript.txt`.
+- **Export** downloads `firetong-transcript.txt`.

@@ -7,7 +7,7 @@ import {
   buildTranslationRequest,
   createPauseDetector,
   missingBrowserFeatures,
-} from "../firetongue/static/app-core.js";
+} from "../firetong/static/app-core.js";
 
 test("pause detector flushes after speech followed by a silence gap", () => {
   let currentTime = 0;

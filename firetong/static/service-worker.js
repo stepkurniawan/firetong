@@ -1,4 +1,4 @@
-const CACHE_NAME = "firetongue-mvp-v8";
+const CACHE_NAME = "firetong-mvp-v8";
 const STATIC_ASSETS = [
   "/",
   "/index.html",

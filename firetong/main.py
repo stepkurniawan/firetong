@@ -3,11 +3,11 @@ from pathlib import Path
 from fastapi import Depends, FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from firetongue.schemas import AppConfig
-from firetongue.settings import Settings, get_settings
+from firetong.schemas import AppConfig
+from firetong.settings import Settings, get_settings
 
 
-app = FastAPI(title="FireTongue MVP")
+app = FastAPI(title="FireTong MVP")
 
 
 @app.get("/api/config", response_model=AppConfig)

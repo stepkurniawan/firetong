@@ -1,7 +1,7 @@
 [project]
-name = "firetongue"
+name = "firetong"
 version = "0.1.0"
-description = "FireTongue MVP: Indonesian sermon transcription and English translation."
+description = "FireTong MVP: Indonesian sermon transcription and English translation."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
-  <title id="title">FireTongue maskable</title>
+  <title id="title">FireTong maskable</title>
   <rect width="512" height="512" fill="#1f6feb"/>
   <circle cx="256" cy="256" r="188" fill="#ffffff" opacity="0.14"/>
   <path fill="#ffffff" d="M256 418c-75 0-132-48-132-119 0-46 24-79 55-111 31-33 50-59 45-103 49 28 79 67 88 115 15-18 24-41 23-69 34 32 53 75 53 121 0 94-66 166-132 166z"/>

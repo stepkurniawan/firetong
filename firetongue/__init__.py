@@ -1,1 +1,0 @@
-"""FireTongue MVP package."""

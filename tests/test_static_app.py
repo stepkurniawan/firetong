@@ -2,7 +2,7 @@ from pathlib import Path
 import json
 
 
-STATIC_DIR = Path("firetongue/static")
+STATIC_DIR = Path("firetong/static")
 
 
 def test_browser_app_loads_transformers_for_in_browser_stt():
@@ -27,7 +27,7 @@ def test_browser_app_calls_openai_translation_directly():
 
     assert "chat/completions" in app_core_js
     assert "SERMON_TRANSLATOR_PROMPT" in app_core_js
-    assert "firetongue.openai_api_key" in app_js
+    assert "firetong.openai_api_key" in app_js
     assert 'id="test-openai-button"' in index_html
     assert "testOpenAIConnection" in app_js
     assert "Using built-in browser defaults." in app_js
@@ -39,7 +39,7 @@ def test_browser_app_supports_transcript_export():
     index_html = (STATIC_DIR / "index.html").read_text()
 
     assert 'id="export-button"' in index_html
-    assert "firetongue-transcript.txt" in app_js
+    assert "firetong-transcript.txt" in app_js
 
 
 def test_browser_app_reports_runtime_metrics():

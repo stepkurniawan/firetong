@@ -1,10 +1,10 @@
-from firetongue.settings import Settings
+from firetong.settings import Settings
 
 
-def test_settings_read_firetongue_environment(monkeypatch):
-    monkeypatch.setenv("FIRETONGUE_TRANSLATION_MODEL", "gpt-test")
-    monkeypatch.setenv("FIRETONGUE_TRANSCRIPTION_MODEL", "Xenova/whisper-base")
-    monkeypatch.setenv("FIRETONGUE_CHUNK_SECONDS", "3")
+def test_settings_read_firetong_environment(monkeypatch):
+    monkeypatch.setenv("FIRETONG_TRANSLATION_MODEL", "gpt-test")
+    monkeypatch.setenv("FIRETONG_TRANSCRIPTION_MODEL", "Xenova/whisper-base")
+    monkeypatch.setenv("FIRETONG_CHUNK_SECONDS", "3")
 
     settings = Settings()
 
