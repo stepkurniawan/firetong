@@ -1,4 +1,3 @@
-import { pipeline } from "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2";
 import {
   DEFAULT_CONFIG,
   buildTranslationRequest,
@@ -26,7 +25,6 @@ const lastLatency = document.querySelector("#last-latency");
 const log = document.querySelector("#log");
 
 let config = { ...DEFAULT_CONFIG };
-let transcriberPromise = null;
 let stream = null;
 let recorder = null;
 let audioContext = null;
@@ -119,71 +117,44 @@ function setCaptureState(isCapturing) {
   stopButton.disabled = !isCapturing;
 }
 
-async function getTranscriber() {
-  if (!transcriberPromise) {
-    setLog(`Loading ${config.transcription_model}. First load can take a minute.`);
-    transcriberPromise = pipeline("automatic-speech-recognition", config.transcription_model);
+async function transcribeAudioBlob(blob) {
+  const apiKey = savedApiKey();
+  if (!apiKey) {
+    throw new Error("Add an OpenAI API key to transcribe audio.");
   }
 
-  return transcriberPromise;
-}
+  const form = new FormData();
+  form.append("file", blob, "recording.webm");
+  form.append("model", "whisper-1");
+  form.append("language", "indonesian");
 
-async function warmUpTranscriber() {
-  loadModelButton.disabled = true;
-  try {
-    await getTranscriber();
-    setLog(`${config.transcription_model} is ready.`);
-  } catch (error) {
-    transcriberPromise = null;
-    throw error;
-  } finally {
-    loadModelButton.disabled = false;
+  const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: form,
+  });
+
+  if (!response.ok) {
+    throw new Error(await response.text());
   }
-}
 
-async function decodeToMono16k(blob) {
-  const arrayBuffer = await blob.arrayBuffer();
-  const sourceContext = new AudioContext();
-  const audioBuffer = await sourceContext.decodeAudioData(arrayBuffer);
-  await sourceContext.close();
-
-  const offlineContext = new OfflineAudioContext(
-    1,
-    Math.ceil(audioBuffer.duration * 16000),
-    16000,
-  );
-  const source = offlineContext.createBufferSource();
-  source.buffer = audioBuffer;
-  source.connect(offlineContext.destination);
-  source.start(0);
-
-  const rendered = await offlineContext.startRendering();
-  return rendered.getChannelData(0);
+  const data = await response.json();
+  return (data.text || "").trim();
 }
 
 async function transcribeBlob(blob, startedAt = performance.now()) {
   setRuntimeState("Transcribing");
-  const transcriber = await getTranscriber();
-  const audio = await decodeToMono16k(blob);
-  if (audio.length < 1600) {
+  const transcript = await transcribeAudioBlob(blob);
+  if (!transcript) {
     setRuntimeState("Listening");
     return;
   }
 
-  const result = await transcriber(audio, {
-    language: "indonesian",
-    task: "transcribe",
-  });
-  const transcript = Array.isArray(result) ? result.map((item) => item.text).join(" ") : result.text;
-  const cleanTranscript = (transcript || "").trim();
-  if (!cleanTranscript) {
-    setRuntimeState("Listening");
-    return;
-  }
-
-  appendSource(cleanTranscript);
+  appendSource(transcript);
   setRuntimeState("Translating");
-  const translation = await translateText(cleanTranscript);
+  const translation = await translateText(transcript);
   appendTranslation(translation);
   recordPhraseLatency(startedAt);
   setRuntimeState("Listening");
@@ -233,12 +204,6 @@ async function startCapture() {
     throw new Error("No audio track was shared. Choose a tab/window and enable audio sharing.");
   }
 
-  try {
-    await warmUpTranscriber();
-  } catch (error) {
-    stream.getTracks().forEach((track) => track.stop());
-    throw error;
-  }
   startMeter(new MediaStream(audioTracks));
   const mimeType = supportedMimeType();
   recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
@@ -353,12 +318,8 @@ function exportTranscript() {
 
 saveKeyButton.addEventListener("click", saveApiKey);
 testOpenAIButton.addEventListener("click", testOpenAIConnection);
-loadModelButton.addEventListener("click", async () => {
-  try {
-    await warmUpTranscriber();
-  } catch (error) {
-    setLog(error.message);
-  }
+loadModelButton.addEventListener("click", () => {
+  setLog("OpenAI Whisper API does not require local model loading.");
 });
 captureButton.addEventListener("click", async () => {
   try {

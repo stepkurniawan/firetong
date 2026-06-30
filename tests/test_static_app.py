@@ -5,16 +5,14 @@ import json
 STATIC_DIR = Path("firetong/static")
 
 
-def test_browser_app_loads_transformers_for_in_browser_stt():
+def test_browser_app_supports_audio_capture_for_openai_stt():
     app_js = (STATIC_DIR / "app.js").read_text()
     app_core_js = (STATIC_DIR / "app-core.js").read_text()
     index_html = (STATIC_DIR / "index.html").read_text()
 
-    assert '@xenova/transformers' in app_js
-    assert 'pipeline("automatic-speech-recognition"' in app_js
     assert 'id="load-model-button"' in index_html
-    assert "warmUpTranscriber" in app_js
-    assert "decodeToMono16k" in app_js
+    assert "audio/transcriptions" in app_js
+    assert "decodeToMono16k" not in app_js
     assert "createPauseDetector" in app_core_js
     assert "recorder.requestData()" in app_js
     assert "/api/transcribe" not in app_js
