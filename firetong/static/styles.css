@@ -202,10 +202,10 @@ textarea {
 
 .live-translation {
   margin: 0 14px 14px;
-  border-left: 3px solid #1f6feb;
+  border-left: 3px solid #8aa8cf;
   border-radius: 6px;
-  background: #eef5ff;
-  color: #123b68;
+  background: #f3f7fc;
+  color: #61758d;
   line-height: 1.5;
   padding: 10px 12px;
 }
@@ -213,8 +213,8 @@ textarea {
 .live-translation::before {
   display: block;
   margin-bottom: 4px;
-  color: #1f6feb;
-  content: "Live";
+  color: #71869f;
+  content: "Live draft";
   font-size: 12px;
   font-weight: 750;
   text-transform: uppercase;

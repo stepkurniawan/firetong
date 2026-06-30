@@ -12,10 +12,13 @@ def test_browser_app_supports_audio_capture_for_openai_stt():
 
     assert 'id="load-model-button"' not in index_html
     assert "/api/realtime/token" in app_js
+    assert "/api/realtime/translation-token" in app_js
     assert "RTCPeerConnection" in app_js
     assert 'createDataChannel("oai-events")' in app_js
     assert "conversation.item.input_audio_transcription.delta" in app_js
     assert "conversation.item.input_audio_transcription.completed" in app_js
+    assert "session.output_transcript.delta" in app_js
+    assert "/realtime/translations/calls" in app_js
     assert "/api/transcribe" not in app_js
     assert 'form.append("language", "id")' not in app_js
     assert "MediaRecorder" not in app_js
@@ -46,6 +49,7 @@ def test_browser_app_calls_backend_translation():
     assert "OpenAI API ready (live translation" in app_js
     assert "config.realtime_transcription_model" not in app_js
     assert "config.translation_model" in app_js
+    assert "config.realtime_translation_model" not in app_js
     assert "Using built-in browser defaults." in app_js
     assert "/api/translate" in app_js
     assert "chat/completions" not in app_js
@@ -80,7 +84,9 @@ def test_browser_app_marks_revisable_live_translation():
     assert "config.live_translation_force_words" in app_js
     assert "context_source_text" in app_js
     assert "mode: options.mode" in app_js
+    assert "appendDraftTranslation" in app_js
     assert ".live-translation" in styles_css
+    assert "Live draft" in styles_css
 
 
 def test_browser_app_commits_realtime_audio_for_automatic_translation():

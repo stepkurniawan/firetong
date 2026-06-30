@@ -4,6 +4,8 @@ from pydantic import BaseModel
 class AppConfig(BaseModel):
     openai_base_url: str
     translation_model: str
+    realtime_translation_model: str
+    realtime_translation_language: str
     live_translation_debounce_ms: int
     live_translation_force_words: int
 

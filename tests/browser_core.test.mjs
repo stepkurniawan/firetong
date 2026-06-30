@@ -8,8 +8,10 @@ import {
 
 test("default config exposes browser runtime settings", () => {
   assert.equal(DEFAULT_CONFIG.openai_base_url, "https://api.openai.com/v1");
-  assert.equal(DEFAULT_CONFIG.translation_model, "gpt-4o-mini");
-  assert.equal(DEFAULT_CONFIG.live_translation_debounce_ms, 2000);
+  assert.equal(DEFAULT_CONFIG.translation_model, "gpt-5.4-nano");
+  assert.equal(DEFAULT_CONFIG.realtime_translation_model, "gpt-realtime-translate");
+  assert.equal(DEFAULT_CONFIG.realtime_translation_language, "en");
+  assert.equal(DEFAULT_CONFIG.live_translation_debounce_ms, 500);
   assert.equal(DEFAULT_CONFIG.live_translation_force_words, 20);
 });
 

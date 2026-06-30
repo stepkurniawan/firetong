@@ -18,7 +18,7 @@ const phraseCount = document.querySelector("#phrase-count");
 const lastLatency = document.querySelector("#last-latency");
 const log = document.querySelector("#log");
 
-const LIVE_TRANSLATION_COMMIT_MS = 6000;
+const LIVE_TRANSLATION_COMMIT_MS = 2000;
 const TRANSLATION_CONTEXT_CHARS = 1200;
 const TRANSCRIPTION_COMMIT_IDLE_MS = 900;
 
@@ -26,6 +26,8 @@ let config = { ...DEFAULT_CONFIG };
 let stream = null;
 let peerConnection = null;
 let realtimeChannel = null;
+let translationPeerConnection = null;
+let translationRealtimeChannel = null;
 let audioContext = null;
 let meterFrame = null;
 let completedPhraseCount = 0;
@@ -147,6 +149,19 @@ async function fetchRealtimeToken() {
   return data.value;
 }
 
+async function fetchRealtimeTranslationToken() {
+  const response = await fetch("/api/realtime/translation-token");
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+
+  const data = await response.json();
+  if (!data.value) {
+    throw new Error("Realtime translation token response did not include a client secret.");
+  }
+  return data.value;
+}
+
 function renderLiveSource() {
   const interimText = [...interimSegments.values()]
     .map((segment) => segment.text.trim())
@@ -154,6 +169,13 @@ function renderLiveSource() {
     .join("\n");
   sourceText.value = [sourceFinalText, interimText].filter(Boolean).join("\n");
   sourceText.scrollTop = sourceText.scrollHeight;
+}
+
+function appendDraftTranslation(delta) {
+  if (!delta) return;
+
+  liveDraftTranslation = `${liveDraftTranslation}${delta}`;
+  renderTranslation();
 }
 
 function upsertInterimSegment(itemId, delta) {
@@ -446,6 +468,52 @@ async function startRealtimeCapture(activeStream, audioTracks) {
   setCaptureState(true);
 }
 
+async function startRealtimeTranslationDraft(audioTracks) {
+  const translationToken = await fetchRealtimeTranslationToken();
+  const audioStream = new MediaStream(audioTracks);
+
+  translationPeerConnection = new RTCPeerConnection();
+  translationRealtimeChannel = translationPeerConnection.createDataChannel("oai-events");
+  translationRealtimeChannel.addEventListener("message", (event) => {
+    const realtimeEvent = JSON.parse(event.data);
+    if (realtimeEvent.type === "session.output_transcript.delta") {
+      appendDraftTranslation(realtimeEvent.delta || "");
+    }
+  });
+  translationRealtimeChannel.addEventListener("error", () => {
+    setLog("Realtime draft translation channel failed.");
+  });
+
+  translationPeerConnection.addEventListener("connectionstatechange", () => {
+    if (translationPeerConnection.connectionState === "failed") {
+      setLog("Realtime draft translation connection failed.");
+    }
+  });
+
+  translationPeerConnection.addTrack(audioTracks[0], audioStream);
+
+  const offer = await translationPeerConnection.createOffer();
+  await translationPeerConnection.setLocalDescription(offer);
+
+  const sdpResponse = await fetch(`${config.openai_base_url}/realtime/translations/calls`, {
+    method: "POST",
+    body: offer.sdp,
+    headers: {
+      Authorization: `Bearer ${translationToken}`,
+      "Content-Type": "application/sdp",
+    },
+  });
+
+  if (!sdpResponse.ok) {
+    throw new Error(await sdpResponse.text());
+  }
+
+  await translationPeerConnection.setRemoteDescription({
+    type: "answer",
+    sdp: await sdpResponse.text(),
+  });
+}
+
 async function startCapture() {
   if (!checkBrowserSupport()) return;
 
@@ -464,7 +532,25 @@ async function startCapture() {
   interimSegments = new Map();
   resetLiveTranslationState();
 
-  await startRealtimeCapture(stream, audioTracks);
+  try {
+    await Promise.all([
+      startRealtimeCapture(stream, audioTracks),
+      startRealtimeTranslationDraft(audioTracks),
+    ]);
+  } catch (error) {
+    if (translationRealtimeChannel) translationRealtimeChannel.close();
+    if (realtimeChannel) realtimeChannel.close();
+    if (translationPeerConnection) translationPeerConnection.close();
+    if (peerConnection) peerConnection.close();
+    translationRealtimeChannel = null;
+    realtimeChannel = null;
+    translationPeerConnection = null;
+    peerConnection = null;
+    stopMeter();
+    if (stream) stream.getTracks().forEach((track) => track.stop());
+    stream = null;
+    throw error;
+  }
 }
 
 async function stopCapture() {
@@ -476,11 +562,15 @@ async function stopCapture() {
   }
 
   if (realtimeChannel) realtimeChannel.close();
+  if (translationRealtimeChannel) translationRealtimeChannel.close();
   if (peerConnection) peerConnection.close();
+  if (translationPeerConnection) translationPeerConnection.close();
   stopMeter();
   if (stream) stream.getTracks().forEach((track) => track.stop());
   realtimeChannel = null;
+  translationRealtimeChannel = null;
   peerConnection = null;
+  translationPeerConnection = null;
   stream = null;
   interimSegments = new Map();
   sourceFinalText = sourceText.value.trim();

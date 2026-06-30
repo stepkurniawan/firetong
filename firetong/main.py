@@ -29,6 +29,8 @@ def read_config(settings: Settings = Depends(get_settings)) -> AppConfig:
     return AppConfig(
         openai_base_url=str(settings.openai_base_url).rstrip("/"),
         translation_model=settings.translation_model,
+        realtime_translation_model=settings.realtime_translation_model,
+        realtime_translation_language=settings.realtime_translation_language,
         live_translation_debounce_ms=settings.live_translation_debounce_ms,
         live_translation_force_words=settings.live_translation_force_words,
     )
@@ -89,6 +91,32 @@ async def create_realtime_token(
     client_secret = response.get("value")
     if not client_secret:
         raise HTTPException(502, detail="OpenAI did not return a realtime client secret.")
+
+    return RealtimeTokenResponse(value=client_secret)
+
+
+@app.get("/api/realtime/translation-token", response_model=RealtimeTokenResponse)
+async def create_realtime_translation_token(
+    settings: Settings = Depends(get_settings),
+) -> RealtimeTokenResponse:
+    response = await post_to_openai(
+        settings,
+        "/realtime/translations/client_secrets",
+        json_data={
+            "session": {
+                "model": settings.realtime_translation_model,
+                "audio": {
+                    "output": {
+                        "language": settings.realtime_translation_language,
+                    },
+                },
+            }
+        },
+    )
+
+    client_secret = response.get("value")
+    if not client_secret:
+        raise HTTPException(502, detail="OpenAI did not return a realtime translation client secret.")
 
     return RealtimeTokenResponse(value=client_secret)
 
