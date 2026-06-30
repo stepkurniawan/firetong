@@ -1,13 +1,13 @@
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from httpx import AsyncClient, HTTPError
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from firetong.schemas import (
     AppConfig,
-    TranscriptionResponse,
+    RealtimeTokenResponse,
     TranslationRequest,
     TranslationResponse,
 )
@@ -29,8 +29,6 @@ def read_config(settings: Settings = Depends(get_settings)) -> AppConfig:
     return AppConfig(
         openai_base_url=str(settings.openai_base_url).rstrip("/"),
         translation_model=settings.translation_model,
-        transcription_model=settings.transcription_model,
-        chunk_seconds=settings.chunk_seconds,
     )
 
 
@@ -60,6 +58,37 @@ async def post_to_openai(
             return response.json()
     except HTTPError as exc:
         raise HTTPException(502, detail=f"OpenAI request failed: {exc}") from exc
+
+
+@app.get("/api/realtime/token", response_model=RealtimeTokenResponse)
+async def create_realtime_token(
+    settings: Settings = Depends(get_settings),
+) -> RealtimeTokenResponse:
+    response = await post_to_openai(
+        settings,
+        "/realtime/client_secrets",
+        json_data={
+            "session": {
+                "type": "transcription",
+                "audio": {
+                    "input": {
+                        "transcription": {
+                            "model": settings.transcription_model,
+                            "language": "id",
+                            "delay": settings.realtime_transcription_delay,
+                        },
+                        "turn_detection": None,
+                    }
+                },
+            }
+        },
+    )
+
+    client_secret = response.get("value")
+    if not client_secret:
+        raise HTTPException(502, detail="OpenAI did not return a realtime client secret.")
+
+    return RealtimeTokenResponse(value=client_secret)
 
 
 def render_prompt(template_name: str, **context) -> str:
@@ -99,30 +128,6 @@ async def translate_text(
         translation = choices[0].get("message", {}).get("content", "")
 
     return TranslationResponse(translation=(translation or "").strip())
-
-
-@app.post("/api/transcribe", response_model=TranscriptionResponse)
-async def transcribe_audio(
-    file: UploadFile = File(...),
-    language: str = Form("id"),
-    settings: Settings = Depends(get_settings),
-) -> TranscriptionResponse:
-    file_bytes = await file.read()
-    files = {
-        "file": (
-            file.filename,
-            file_bytes,
-            file.content_type or "application/octet-stream",
-        )
-    }
-    response = await post_to_openai(
-        settings,
-        "/audio/transcriptions",
-        form_data={"model": settings.transcription_model, "language": language},
-        files=files,
-    )
-
-    return TranscriptionResponse(text=(response.get("text", "") or "").strip())
 
 
 static_dir = Path(__file__).parent / "static"

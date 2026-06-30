@@ -4,8 +4,6 @@ from pydantic import BaseModel
 class AppConfig(BaseModel):
     openai_base_url: str
     translation_model: str
-    transcription_model: str
-    chunk_seconds: int
 
 
 class TranslationRequest(BaseModel):
@@ -16,5 +14,5 @@ class TranslationResponse(BaseModel):
     translation: str
 
 
-class TranscriptionResponse(BaseModel):
-    text: str
+class RealtimeTokenResponse(BaseModel):
+    value: str

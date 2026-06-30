@@ -6,10 +6,10 @@ FireTong is a lightweight MVP for capturing browser audio, transcribing Indonesi
 
 - Local FastAPI server serving a static browser application
 - Browser tab audio capture using `getDisplayMedia()`
-- OpenAI Whisper API transcription through the local backend
+- OpenAI Realtime WebRTC transcription with server-minted client secrets
 - OpenAI translation of Indonesian sermon text to English through the local backend
 - Split Indonesian / English transcript panels with auto-scroll and export
-- Simple local API for runtime configuration and audio transcription
+- Simple local API for runtime configuration, realtime token creation, and translation
 - Pytest coverage for config and app wiring
 
 ## Requirements
@@ -46,7 +46,7 @@ http://127.0.0.1:8000
 - Load the page in Chrome or Edge
 - Click **Test OpenAI** to verify backend OpenAI access
 - Click **Capture tab audio** and select the sermon tab with audio enabled
-- The app sends audio chunks to `/api/transcribe` after about a half-second speech pause, which uses the OpenAI Whisper API
+- The app streams captured tab audio through an OpenAI Realtime WebRTC transcription session
 
 ## Configuration
 
@@ -55,14 +55,14 @@ FireTong reads runtime settings from environment variables prefixed with `FIRETO
 - `FIRETONG_OPENAI_BASE_URL` — Base URL for OpenAI API (default: `https://api.openai.com/v1`)
 - `FIRETONG_OPENAI_API_KEY` — OpenAI API key used by the local backend
 - `FIRETONG_TRANSLATION_MODEL` — Translation model (default: `gpt-4o-mini`)
-- `FIRETONG_TRANSCRIPTION_MODEL` — OpenAI transcription model (default: `whisper-1`)
-- `FIRETONG_CHUNK_SECONDS` — Maximum phrase chunk duration for browser transcription (default: `5`)
+- `FIRETONG_TRANSCRIPTION_MODEL` — OpenAI Realtime transcription model (default: `gpt-realtime-whisper`)
+- `FIRETONG_REALTIME_TRANSCRIPTION_DELAY` — Realtime transcription latency setting (default: `low`)
 
 ## API Endpoints
 
 - `GET /api/config` — returns current app configuration
+- `GET /api/realtime/token` — creates a short-lived OpenAI Realtime client secret
 - `POST /api/translate` — translate Indonesian text to English
-- `POST /api/transcribe` — transcribe uploaded audio using OpenAI
 
 ## Testing
 
@@ -74,5 +74,5 @@ uv run pytest
 
 ## Notes
 
-- The Python backend owns OpenAI transcription and translation calls.
+- The Python backend owns OpenAI token creation and translation calls.
 - For full browser audio capture, use Chrome or Edge and enable tab audio sharing.

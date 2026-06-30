@@ -1,6 +1,5 @@
 import {
   DEFAULT_CONFIG,
-  createPauseDetector,
   missingBrowserFeatures,
 } from "./app-core.js";
 
@@ -13,7 +12,6 @@ const copyButton = document.querySelector("#copy-button");
 const exportButton = document.querySelector("#export-button");
 const sourceText = document.querySelector("#source-text");
 const translatedText = document.querySelector("#translated-text");
-const chunkSeconds = document.querySelector("#chunk-seconds");
 const meterBar = document.querySelector("#meter-bar");
 const captureState = document.querySelector("#capture-state");
 const phraseCount = document.querySelector("#phrase-count");
@@ -22,12 +20,13 @@ const log = document.querySelector("#log");
 
 let config = { ...DEFAULT_CONFIG };
 let stream = null;
-let recorder = null;
+let peerConnection = null;
+let realtimeChannel = null;
 let audioContext = null;
 let meterFrame = null;
-let transcribeQueue = Promise.resolve();
-let pauseDetector = null;
 let completedPhraseCount = 0;
+let sourceFinalText = "";
+let interimSegments = new Map();
 
 function setLog(message) {
   log.textContent = message;
@@ -53,8 +52,7 @@ async function readConfig() {
     setLog("Using built-in browser defaults.");
   }
 
-  chunkSeconds.value = config.chunk_seconds;
-  apiStatus.textContent = `OpenAI API ready (${config.transcription_model}, ${config.translation_model})`;
+  apiStatus.textContent = `OpenAI API ready (realtime transcription, ${config.translation_model})`;
   checkBrowserSupport();
 }
 
@@ -76,6 +74,7 @@ function appendSource(text) {
   if (!cleanText) return;
 
   sourceText.value = `${sourceText.value}${sourceText.value ? "\n" : ""}${cleanText}`;
+  sourceFinalText = sourceText.value.trim();
   sourceText.scrollTop = sourceText.scrollHeight;
 }
 
@@ -92,38 +91,85 @@ function setCaptureState(isCapturing) {
   stopButton.disabled = !isCapturing;
 }
 
-async function transcribeAudioBlob(blob) {
-  const form = new FormData();
-  form.append("file", blob, "recording.webm");
-  form.append("language", "id");
+function stopMeter() {
+  if (meterFrame) cancelAnimationFrame(meterFrame);
+  if (audioContext) audioContext.close();
+  meterFrame = null;
+  audioContext = null;
+  meterBar.style.width = "0%";
+}
 
-  const response = await fetch("/api/transcribe", {
-    method: "POST",
-    body: form,
-  });
-
+async function fetchRealtimeToken() {
+  const response = await fetch("/api/realtime/token");
   if (!response.ok) {
     throw new Error(await response.text());
   }
 
   const data = await response.json();
-  return (data.text || "").trim();
+  if (!data.value) {
+    throw new Error("Realtime token response did not include a client secret.");
+  }
+  return data.value;
 }
 
-async function transcribeBlob(blob, startedAt = performance.now()) {
-  setRuntimeState("Transcribing");
-  const transcript = await transcribeAudioBlob(blob);
-  if (!transcript) {
-    setRuntimeState("Listening");
+function renderLiveSource() {
+  const interimText = [...interimSegments.values()]
+    .map((segment) => segment.text.trim())
+    .filter(Boolean)
+    .join("\n");
+  sourceText.value = [sourceFinalText, interimText].filter(Boolean).join("\n");
+  sourceText.scrollTop = sourceText.scrollHeight;
+}
+
+function upsertInterimSegment(itemId, delta) {
+  const segment = interimSegments.get(itemId) || {
+    text: "",
+    startedAt: performance.now(),
+  };
+  segment.text = `${segment.text}${delta}`;
+  interimSegments.set(itemId, segment);
+  renderLiveSource();
+}
+
+async function finalizeInterimSegment(itemId, transcript) {
+  const segment = interimSegments.get(itemId);
+  const startedAt = segment?.startedAt || performance.now();
+  const cleanTranscript = (transcript || segment?.text || "").trim();
+  interimSegments.delete(itemId);
+
+  if (!cleanTranscript) {
+    renderLiveSource();
     return;
   }
 
-  appendSource(transcript);
-  setRuntimeState("Translating");
-  const translation = await translateText(transcript);
-  appendTranslation(translation);
+  sourceFinalText = `${sourceFinalText}${sourceFinalText ? "\n" : ""}${cleanTranscript}`;
+  renderLiveSource();
   recordPhraseLatency(startedAt);
-  setRuntimeState("Listening");
+  setRuntimeState("Translating");
+
+  try {
+    const translation = await translateText(cleanTranscript);
+    appendTranslation(translation);
+    if (peerConnection) setRuntimeState("Live");
+  } catch (error) {
+    setRuntimeState("Error");
+    setLog(error.message);
+  }
+}
+
+function handleRealtimeEvent(event) {
+  if (event.type === "conversation.item.input_audio_transcription.delta") {
+    upsertInterimSegment(event.item_id, event.delta || "");
+  }
+
+  if (event.type === "conversation.item.input_audio_transcription.completed") {
+    finalizeInterimSegment(event.item_id, event.transcript || "");
+  }
+
+  if (event.type === "error") {
+    setRuntimeState("Error");
+    setLog(event.error?.message || "Realtime transcription failed.");
+  }
 }
 
 function startMeter(activeStream) {
@@ -139,21 +185,74 @@ function startMeter(activeStream) {
     const level = peak / 255;
     meterBar.style.width = `${Math.min(100, Math.round(level * 100))}%`;
 
-    maybeFlushOnPause(level);
     meterFrame = requestAnimationFrame(tick);
   }
 
   tick();
 }
 
-function maybeFlushOnPause(level) {
-  if (!pauseDetector) return;
-  pauseDetector.sample(level);
-}
+async function startRealtimeCapture(activeStream, audioTracks) {
+  setRuntimeState("Connecting");
+  setLog("Connecting live transcription...");
 
-function supportedMimeType() {
-  const types = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
-  return types.find((type) => MediaRecorder.isTypeSupported(type)) || "";
+  const realtimeToken = await fetchRealtimeToken();
+  const audioStream = new MediaStream(audioTracks);
+  startMeter(audioStream);
+
+  peerConnection = new RTCPeerConnection();
+  realtimeChannel = peerConnection.createDataChannel("oai-events");
+  realtimeChannel.addEventListener("open", () => {
+    setRuntimeState("Live");
+    setLog("Live transcription is running.");
+  });
+  realtimeChannel.addEventListener("message", (event) => {
+    handleRealtimeEvent(JSON.parse(event.data));
+  });
+  realtimeChannel.addEventListener("error", () => {
+    setRuntimeState("Error");
+    setLog("Realtime transcription channel failed.");
+  });
+
+  peerConnection.addEventListener("connectionstatechange", () => {
+    if (peerConnection.connectionState === "connected") {
+      setRuntimeState("Live");
+    }
+    if (peerConnection.connectionState === "connecting") {
+      setRuntimeState("Connecting");
+    }
+    if (peerConnection.connectionState === "disconnected") {
+      setRuntimeState("Reconnecting");
+    }
+    if (peerConnection.connectionState === "failed") {
+      setRuntimeState("Error");
+      setLog("Realtime connection failed.");
+    }
+  });
+
+  peerConnection.addTrack(audioTracks[0], audioStream);
+
+  const offer = await peerConnection.createOffer();
+  await peerConnection.setLocalDescription(offer);
+
+  const sdpResponse = await fetch(`${config.openai_base_url}/realtime/calls`, {
+    method: "POST",
+    body: offer.sdp,
+    headers: {
+      Authorization: `Bearer ${realtimeToken}`,
+      "Content-Type": "application/sdp",
+    },
+  });
+
+  if (!sdpResponse.ok) {
+    throw new Error(await sdpResponse.text());
+  }
+
+  await peerConnection.setRemoteDescription({
+    type: "answer",
+    sdp: await sdpResponse.text(),
+  });
+
+  setCaptureState(true);
 }
 
 async function startCapture() {
@@ -170,44 +269,24 @@ async function startCapture() {
     throw new Error("No audio track was shared. Choose a tab/window and enable audio sharing.");
   }
 
-  startMeter(new MediaStream(audioTracks));
-  const mimeType = supportedMimeType();
-  recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
-  recorder.ondataavailable = (event) => {
-    if (event.data.size === 0) return;
+  sourceFinalText = sourceText.value.trim();
+  interimSegments = new Map();
 
-    const startedAt = performance.now();
-    transcribeQueue = transcribeQueue
-      .then(() => transcribeBlob(event.data, startedAt))
-      .catch((error) => {
-        setRuntimeState("Error");
-        setLog(error.message);
-      });
-  };
-  pauseDetector = createPauseDetector({
-    maxChunkMs: Number(chunkSeconds.value) * 1000,
-    onFlush: () => {
-      if (!recorder || recorder.state !== "recording") return;
-      recorder.requestData();
-      setRuntimeState("Processing");
-      setLog("Processing phrase...");
-    },
-  });
-  recorder.start();
-  setCaptureState(true);
-  setRuntimeState("Listening");
-  setLog("Listening for speech pauses...");
+  await startRealtimeCapture(stream, audioTracks);
 }
 
 function stopCapture() {
-  if (recorder && recorder.state !== "inactive") recorder.stop();
-  if (meterFrame) cancelAnimationFrame(meterFrame);
-  if (audioContext) audioContext.close();
+  if (realtimeChannel) realtimeChannel.close();
+  if (peerConnection) peerConnection.close();
+  stopMeter();
   if (stream) stream.getTracks().forEach((track) => track.stop());
-  if (pauseDetector) pauseDetector.reset();
-  meterBar.style.width = "0%";
+  realtimeChannel = null;
+  peerConnection = null;
+  stream = null;
+  interimSegments = new Map();
+  sourceFinalText = sourceText.value.trim();
   setCaptureState(false);
-  setRuntimeState("Idle");
+  setRuntimeState("Stopped");
   setLog("Capture stopped.");
 }
 

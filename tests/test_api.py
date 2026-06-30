@@ -21,20 +21,16 @@ def test_config_reports_openai_model_defaults():
     assert response.json() == {
         "openai_base_url": "https://api.openai.com/v1",
         "translation_model": "gpt-4o-mini",
-        "transcription_model": "whisper-1",
-        "chunk_seconds": 5,
     }
     app.dependency_overrides.clear()
 
 
-def test_server_exposes_translation_and_transcription_routes():
+def test_server_exposes_translation_route():
     client = TestClient(app)
 
     response = client.post("/api/translate", json={})
-    transcribe_response = client.post("/api/transcribe")
 
     assert response.status_code == 422
-    assert transcribe_response.status_code == 422
 
 
 def test_translation_prompt_renders_from_jinja_template():
@@ -92,36 +88,46 @@ def test_translate_route_uses_backend_openai_chat_completion(monkeypatch):
     app.dependency_overrides.clear()
 
 
-def test_transcribe_route_uses_openai_whisper_api(monkeypatch):
+def test_realtime_token_route_creates_transcription_session(monkeypatch):
     calls = []
 
     async def fake_post_to_openai(settings, path, json_data=None, form_data=None, files=None):
         calls.append(
             {
                 "path": path,
-                "form_data": form_data,
+                "json_data": json_data,
                 "files": files,
                 "model": settings.transcription_model,
             }
         )
-        return {"text": "Tuhan itu baik."}
+        return {"value": "ephemeral-secret"}
 
     monkeypatch.setattr("firetong.main.post_to_openai", fake_post_to_openai)
     app.dependency_overrides[get_settings] = override_settings(openai_api_key="test-key")
     client = TestClient(app)
 
-    response = client.post(
-        "/api/transcribe",
-        data={"language": "id"},
-        files={"file": ("recording.webm", b"audio-bytes", "audio/webm")},
-    )
+    response = client.get("/api/realtime/token")
 
     assert response.status_code == 200
-    assert response.json() == {"text": "Tuhan itu baik."}
-    assert calls[0]["path"] == "/audio/transcriptions"
-    assert calls[0]["form_data"] == {"model": "whisper-1", "language": "id"}
-    assert calls[0]["files"]["file"] == ("recording.webm", b"audio-bytes", "audio/webm")
-    assert calls[0]["model"] == "whisper-1"
+    assert response.json() == {"value": "ephemeral-secret"}
+    assert calls[0]["path"] == "/realtime/client_secrets"
+    assert calls[0]["json_data"] == {
+        "session": {
+            "type": "transcription",
+            "audio": {
+                "input": {
+                    "transcription": {
+                        "model": "gpt-realtime-whisper",
+                        "language": "id",
+                        "delay": "low",
+                    },
+                    "turn_detection": None,
+                }
+            },
+        }
+    }
+    assert calls[0]["files"] is None
+    assert calls[0]["model"] == "gpt-realtime-whisper"
     app.dependency_overrides.clear()
 
 
@@ -130,7 +136,10 @@ def test_openai_routes_require_server_api_key():
     client = TestClient(app)
 
     response = client.post("/api/translate", json={"source_text": "Tuhan itu baik."})
+    realtime_response = client.get("/api/realtime/token")
 
     assert response.status_code == 503
     assert response.json() == {"detail": "OpenAI API key is not configured on the server."}
+    assert realtime_response.status_code == 503
+    assert realtime_response.json() == {"detail": "OpenAI API key is not configured on the server."}
     app.dependency_overrides.clear()
