@@ -36,11 +36,14 @@ def test_browser_app_calls_backend_translation():
 
     assert 'id="api-key"' not in index_html
     assert 'id="save-key-button"' not in index_html
+    assert 'id="translate-button"' not in index_html
+    assert 'id="source-text" readonly' in index_html
     assert 'id="test-openai-button"' in index_html
     assert 'id="load-model-button"' not in index_html
     assert "testServerConnection" in app_js
+    assert "translateCurrentText" not in app_js
     assert "Backend translation test passed." in app_js
-    assert "OpenAI API ready" in app_js
+    assert "OpenAI API ready (live translation" in app_js
     assert "config.realtime_transcription_model" not in app_js
     assert "config.translation_model" in app_js
     assert "Using built-in browser defaults." in app_js

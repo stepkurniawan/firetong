@@ -20,7 +20,7 @@
 
       <section class="controls">
         <button id="test-openai-button">Test OpenAI</button>
-        <button id="capture-button">Capture tab audio</button>
+        <button id="capture-button">Start live translation</button>
         <button id="stop-button" disabled>Stop</button>
         <div class="meter" aria-label="Audio level">
           <span id="meter-bar"></span>
@@ -45,10 +45,9 @@
       <section class="panels" aria-label="Transcript and translation">
         <article class="panel">
           <div class="panel-title">
-            <h2>Indonesian</h2>
-            <button id="translate-button">Translate</button>
+            <h2>Indonesian source</h2>
           </div>
-          <textarea id="source-text" placeholder="Transcribed Indonesian text appears here. You can also type text manually."></textarea>
+          <textarea id="source-text" readonly placeholder="Live Indonesian source appears here."></textarea>
         </article>
 
         <article class="panel">

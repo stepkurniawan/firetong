@@ -7,7 +7,6 @@ const apiStatus = document.querySelector("#api-status");
 const testOpenAIButton = document.querySelector("#test-openai-button");
 const captureButton = document.querySelector("#capture-button");
 const stopButton = document.querySelector("#stop-button");
-const translateButton = document.querySelector("#translate-button");
 const copyButton = document.querySelector("#copy-button");
 const exportButton = document.querySelector("#export-button");
 const sourceText = document.querySelector("#source-text");
@@ -64,7 +63,7 @@ async function readConfig() {
     setLog("Using built-in browser defaults.");
   }
 
-  apiStatus.textContent = `OpenAI API ready (realtime transcription, ${config.translation_model})`;
+  apiStatus.textContent = `OpenAI API ready (live translation, ${config.translation_model})`;
   checkBrowserSupport();
 }
 
@@ -360,7 +359,7 @@ function handleRealtimeEvent(event) {
 
   if (event.type === "error") {
     setRuntimeState("Error");
-    setLog(event.error?.message || "Realtime transcription failed.");
+    setLog(event.error?.message || "Realtime audio translation failed.");
   }
 }
 
@@ -385,7 +384,7 @@ function startMeter(activeStream) {
 
 async function startRealtimeCapture(activeStream, audioTracks) {
   setRuntimeState("Connecting");
-  setLog("Connecting live transcription...");
+  setLog("Connecting live translation...");
 
   const realtimeToken = await fetchRealtimeToken();
   const audioStream = new MediaStream(audioTracks);
@@ -395,14 +394,14 @@ async function startRealtimeCapture(activeStream, audioTracks) {
   realtimeChannel = peerConnection.createDataChannel("oai-events");
   realtimeChannel.addEventListener("open", () => {
     setRuntimeState("Live");
-    setLog("Live transcription is running.");
+    setLog("Live translation is running.");
   });
   realtimeChannel.addEventListener("message", (event) => {
     handleRealtimeEvent(JSON.parse(event.data));
   });
   realtimeChannel.addEventListener("error", () => {
     setRuntimeState("Error");
-    setLog("Realtime transcription channel failed.");
+    setLog("Realtime audio translation channel failed.");
   });
 
   peerConnection.addEventListener("connectionstatechange", () => {
@@ -515,24 +514,6 @@ async function translateText(text, options = {}) {
   return data.translation || "";
 }
 
-async function translateCurrentText() {
-  const text = sourceText.value.trim();
-  if (!text) {
-    setLog("Add Indonesian text first.");
-    return;
-  }
-
-  translateButton.disabled = true;
-  try {
-    resetLiveTranslationState();
-    stableTranslationText = await translateText(text);
-    liveDraftTranslation = "";
-    renderTranslation();
-  } finally {
-    translateButton.disabled = false;
-  }
-}
-
 async function testServerConnection() {
   testOpenAIButton.disabled = true;
   try {
@@ -589,7 +570,6 @@ captureButton.addEventListener("click", async () => {
 stopButton.addEventListener("click", () => {
   stopCapture().catch((error) => setLog(error.message));
 });
-translateButton.addEventListener("click", translateCurrentText);
 copyButton.addEventListener("click", async () => {
   await navigator.clipboard.writeText(getFullTranslationText());
   setLog("Copied translation.");

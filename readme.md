@@ -1,13 +1,13 @@
 # FireTong
 
-FireTong is a lightweight MVP for capturing browser audio, transcribing Indonesian sermon audio, and translating it to English in a single browser page.
+FireTong is a lightweight MVP for capturing browser audio and translating Indonesian sermon speech to English live in a single browser page.
 
 ## Key Features
 
 - Local FastAPI server serving a static browser application
 - Browser tab audio capture using `getDisplayMedia()`
-- OpenAI Realtime WebRTC transcription with server-minted client secrets
-- OpenAI translation of Indonesian sermon text to English through the local backend
+- OpenAI Realtime WebRTC source capture with server-minted client secrets
+- Automatic OpenAI translation of Indonesian sermon speech to English through the local backend
 - Split Indonesian / English transcript panels with auto-scroll and export
 - Simple local API for runtime configuration, realtime token creation, and translation
 - Pytest coverage for config and app wiring
@@ -45,8 +45,8 @@ http://127.0.0.1:8000
 
 - Load the page in Chrome or Edge
 - Click **Test OpenAI** to verify backend OpenAI access
-- Click **Capture tab audio** and select the sermon tab with audio enabled
-- The app streams captured tab audio through an OpenAI Realtime WebRTC transcription session
+- Click **Start live translation** and select the sermon tab with audio enabled
+- The app streams captured tab audio through an OpenAI Realtime WebRTC session, then translates finalized source lines to English
 
 ## Configuration
 
