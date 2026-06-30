@@ -12,11 +12,16 @@ const copyButton = document.querySelector("#copy-button");
 const exportButton = document.querySelector("#export-button");
 const sourceText = document.querySelector("#source-text");
 const translatedText = document.querySelector("#translated-text");
+const liveTranslation = document.querySelector("#live-translation");
 const meterBar = document.querySelector("#meter-bar");
 const captureState = document.querySelector("#capture-state");
 const phraseCount = document.querySelector("#phrase-count");
 const lastLatency = document.querySelector("#last-latency");
 const log = document.querySelector("#log");
+
+const LIVE_TRANSLATION_COMMIT_MS = 6000;
+const TRANSLATION_CONTEXT_CHARS = 1200;
+const TRANSCRIPTION_COMMIT_IDLE_MS = 900;
 
 let config = { ...DEFAULT_CONFIG };
 let stream = null;
@@ -27,6 +32,13 @@ let meterFrame = null;
 let completedPhraseCount = 0;
 let sourceFinalText = "";
 let interimSegments = new Map();
+let stableTranslationText = "";
+let liveDraftTranslation = "";
+let translationBuffer = [];
+let translationTimer = null;
+let translationInFlight = false;
+let translationNeedsRerun = false;
+let transcriptionCommitTimer = null;
 
 function setLog(message) {
   log.textContent = message;
@@ -82,8 +94,32 @@ function appendTranslation(text) {
   const cleanText = text.trim();
   if (!cleanText) return;
 
-  translatedText.value = `${translatedText.value}${translatedText.value ? "\n" : ""}${cleanText}`;
+  stableTranslationText = `${stableTranslationText}${stableTranslationText ? "\n" : ""}${cleanText}`;
+  renderTranslation();
+}
+
+function renderTranslation() {
+  translatedText.value = stableTranslationText;
   translatedText.scrollTop = translatedText.scrollHeight;
+  liveTranslation.textContent = liveDraftTranslation;
+  liveTranslation.hidden = !liveDraftTranslation;
+}
+
+function getFullTranslationText() {
+  return [stableTranslationText, liveDraftTranslation].filter(Boolean).join("\n");
+}
+
+function resetLiveTranslationState() {
+  if (translationTimer) clearTimeout(translationTimer);
+  if (transcriptionCommitTimer) clearTimeout(transcriptionCommitTimer);
+  translationTimer = null;
+  transcriptionCommitTimer = null;
+  translationInFlight = false;
+  translationNeedsRerun = false;
+  translationBuffer = [];
+  liveDraftTranslation = "";
+  stableTranslationText = translatedText.value.trim();
+  renderTranslation();
 }
 
 function setCaptureState(isCapturing) {
@@ -129,6 +165,171 @@ function upsertInterimSegment(itemId, delta) {
   segment.text = `${segment.text}${delta}`;
   interimSegments.set(itemId, segment);
   renderLiveSource();
+  scheduleTranscriptionCommit();
+}
+
+function countWords(text) {
+  return text.trim().split(/\s+/).filter(Boolean).length;
+}
+
+function bufferedSourceText() {
+  return translationBuffer.map((segment) => segment.text).join(" ").trim();
+}
+
+function hasStrongBoundary(text) {
+  return /[.!?。！？]\s*$/.test(text.trim());
+}
+
+function shouldCommitBuffer(buffer, now = performance.now()) {
+  if (buffer.length === 0) return false;
+
+  const text = buffer.map((segment) => segment.text).join(" ");
+  const oldestCompletedAt = buffer[0].completedAt;
+  return hasStrongBoundary(text) || now - oldestCompletedAt >= LIVE_TRANSLATION_COMMIT_MS;
+}
+
+function translationContext(text) {
+  return text.slice(Math.max(0, text.length - TRANSLATION_CONTEXT_CHARS));
+}
+
+function removeTranslatedSnapshot(snapshotText) {
+  const snapshotSegments = snapshotText.split("\n");
+  translationBuffer = translationBuffer.slice(snapshotSegments.length);
+}
+
+function wait(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function queueLiveTranslation(text) {
+  const cleanText = text.trim();
+  if (!cleanText) return;
+
+  translationBuffer.push({
+    text: cleanText,
+    completedAt: performance.now(),
+  });
+
+  const wordCount = countWords(bufferedSourceText());
+  const delay =
+    wordCount >= config.live_translation_force_words ? 0 : config.live_translation_debounce_ms;
+  scheduleLiveTranslation(delay);
+}
+
+function scheduleLiveTranslation(delay = config.live_translation_debounce_ms) {
+  if (translationTimer) clearTimeout(translationTimer);
+  translationTimer = setTimeout(() => {
+    translationTimer = null;
+    translateLiveBuffer().catch((error) => {
+      setRuntimeState("Error");
+      setLog(error.message);
+    });
+  }, delay);
+}
+
+function scheduleTranscriptionCommit() {
+  if (transcriptionCommitTimer) clearTimeout(transcriptionCommitTimer);
+  transcriptionCommitTimer = setTimeout(() => {
+    transcriptionCommitTimer = null;
+    commitTranscriptionBuffer();
+  }, TRANSCRIPTION_COMMIT_IDLE_MS);
+}
+
+function commitTranscriptionBuffer() {
+  if (!realtimeChannel || realtimeChannel.readyState !== "open") return;
+  if (interimSegments.size === 0) return;
+
+  realtimeChannel.send(
+    JSON.stringify({
+      type: "input_audio_buffer.commit",
+    }),
+  );
+}
+
+async function waitForPendingTranscription(maxWaitMs = 1500) {
+  const startedAt = performance.now();
+  while (interimSegments.size > 0 && performance.now() - startedAt < maxWaitMs) {
+    await wait(50);
+  }
+}
+
+async function queueRemainingInterimSegments() {
+  const remainingSegments = [...interimSegments.entries()];
+  for (const [itemId, segment] of remainingSegments) {
+    await finalizeInterimSegment(itemId, segment.text);
+  }
+}
+
+async function translateLiveBuffer({ finalize = false } = {}) {
+  if (translationInFlight) {
+    translationNeedsRerun = true;
+    return;
+  }
+
+  const sourceToTranslate = bufferedSourceText();
+  if (!sourceToTranslate) return;
+
+  translationInFlight = true;
+  setRuntimeState("Translating");
+
+  try {
+    const snapshot = [...translationBuffer];
+    const snapshotText = snapshot.map((segment) => segment.text).join("\n");
+    const translation = await translateText(snapshotText, {
+      contextSourceText: translationContext(sourceFinalText.replace(snapshotText, "")),
+      contextTranslation: translationContext(stableTranslationText),
+      mode: finalize || shouldCommitBuffer(snapshot) ? "final" : "draft",
+    });
+
+    if (finalize || shouldCommitBuffer(snapshot)) {
+      appendTranslation(translation);
+      liveDraftTranslation = "";
+      removeTranslatedSnapshot(snapshotText);
+    } else {
+      liveDraftTranslation = translation.trim();
+    }
+    renderTranslation();
+
+    if (peerConnection) setRuntimeState("Live");
+  } finally {
+    translationInFlight = false;
+  }
+
+  if (translationNeedsRerun) {
+    translationNeedsRerun = false;
+    scheduleLiveTranslation(0);
+  }
+}
+
+async function finalizeLiveTranslation() {
+  if (translationTimer) clearTimeout(translationTimer);
+  if (transcriptionCommitTimer) clearTimeout(transcriptionCommitTimer);
+  translationTimer = null;
+  transcriptionCommitTimer = null;
+  commitTranscriptionBuffer();
+  await waitForPendingTranscription();
+
+  if (interimSegments.size > 0) {
+    await queueRemainingInterimSegments();
+  }
+
+  while (translationInFlight) {
+    translationNeedsRerun = false;
+    await wait(50);
+  }
+
+  if (!bufferedSourceText()) {
+    if (liveDraftTranslation) {
+      appendTranslation(liveDraftTranslation);
+      liveDraftTranslation = "";
+      renderTranslation();
+    }
+    return;
+  }
+
+  await translateLiveBuffer({ finalize: true });
 }
 
 async function finalizeInterimSegment(itemId, transcript) {
@@ -145,16 +346,7 @@ async function finalizeInterimSegment(itemId, transcript) {
   sourceFinalText = `${sourceFinalText}${sourceFinalText ? "\n" : ""}${cleanTranscript}`;
   renderLiveSource();
   recordPhraseLatency(startedAt);
-  setRuntimeState("Translating");
-
-  try {
-    const translation = await translateText(cleanTranscript);
-    appendTranslation(translation);
-    if (peerConnection) setRuntimeState("Live");
-  } catch (error) {
-    setRuntimeState("Error");
-    setLog(error.message);
-  }
+  queueLiveTranslation(cleanTranscript);
 }
 
 function handleRealtimeEvent(event) {
@@ -271,11 +463,19 @@ async function startCapture() {
 
   sourceFinalText = sourceText.value.trim();
   interimSegments = new Map();
+  resetLiveTranslationState();
 
   await startRealtimeCapture(stream, audioTracks);
 }
 
-function stopCapture() {
+async function stopCapture() {
+  try {
+    await finalizeLiveTranslation();
+  } catch (error) {
+    setRuntimeState("Error");
+    setLog(error.message);
+  }
+
   if (realtimeChannel) realtimeChannel.close();
   if (peerConnection) peerConnection.close();
   stopMeter();
@@ -290,7 +490,7 @@ function stopCapture() {
   setLog("Capture stopped.");
 }
 
-async function translateText(text) {
+async function translateText(text, options = {}) {
   setLog("Translating...");
 
   const response = await fetch("/api/translate", {
@@ -298,7 +498,12 @@ async function translateText(text) {
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ source_text: text }),
+    body: JSON.stringify({
+      source_text: text,
+      context_source_text: options.contextSourceText || "",
+      context_translation: options.contextTranslation || "",
+      mode: options.mode || "final",
+    }),
   });
 
   if (!response.ok) {
@@ -319,8 +524,10 @@ async function translateCurrentText() {
 
   translateButton.disabled = true;
   try {
-    translatedText.value = await translateText(text);
-    translatedText.scrollTop = translatedText.scrollHeight;
+    resetLiveTranslationState();
+    stableTranslationText = await translateText(text);
+    liveDraftTranslation = "";
+    renderTranslation();
   } finally {
     translateButton.disabled = false;
   }
@@ -358,7 +565,7 @@ function exportTranscript() {
     sourceText.value,
     "",
     "English",
-    translatedText.value,
+    getFullTranslationText(),
   ].join("\n");
   const blob = new Blob([body], { type: "text/plain" });
   const url = URL.createObjectURL(blob);
@@ -379,10 +586,12 @@ captureButton.addEventListener("click", async () => {
   }
 });
 
-stopButton.addEventListener("click", stopCapture);
+stopButton.addEventListener("click", () => {
+  stopCapture().catch((error) => setLog(error.message));
+});
 translateButton.addEventListener("click", translateCurrentText);
 copyButton.addEventListener("click", async () => {
-  await navigator.clipboard.writeText(translatedText.value);
+  await navigator.clipboard.writeText(getFullTranslationText());
   setLog("Copied translation.");
 });
 exportButton.addEventListener("click", exportTranscript);

@@ -29,6 +29,8 @@ def read_config(settings: Settings = Depends(get_settings)) -> AppConfig:
     return AppConfig(
         openai_base_url=str(settings.openai_base_url).rstrip("/"),
         translation_model=settings.translation_model,
+        live_translation_debounce_ms=settings.live_translation_debounce_ms,
+        live_translation_force_words=settings.live_translation_force_words,
     )
 
 
@@ -96,6 +98,24 @@ def render_prompt(template_name: str, **context) -> str:
     return template.render(**context).strip()
 
 
+def build_translation_user_message(request: TranslationRequest) -> str:
+    if not request.context_source_text and not request.context_translation and request.mode == "final":
+        return request.source_text
+
+    return "\n\n".join(
+        [
+            f"Mode: {request.mode}",
+            "Previous Indonesian context:\n"
+            f"{request.context_source_text or '(none)'}",
+            "Previous English context:\n"
+            f"{request.context_translation or '(none)'}",
+            "Current Indonesian source to translate:\n"
+            f"{request.source_text}",
+            "Return only the English translation for the current Indonesian source.",
+        ]
+    )
+
+
 @app.post("/api/translate", response_model=TranslationResponse)
 async def translate_text(
     request: TranslationRequest,
@@ -116,7 +136,7 @@ async def translate_text(
                     "role": "system",
                     "content": system_prompt,
                 },
-                {"role": "user", "content": request.source_text},
+                {"role": "user", "content": build_translation_user_message(request)},
             ],
             "temperature": 0.2,
         },

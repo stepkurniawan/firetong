@@ -9,6 +9,8 @@ import {
 test("default config exposes browser runtime settings", () => {
   assert.equal(DEFAULT_CONFIG.openai_base_url, "https://api.openai.com/v1");
   assert.equal(DEFAULT_CONFIG.translation_model, "gpt-4o-mini");
+  assert.equal(DEFAULT_CONFIG.live_translation_debounce_ms, 2000);
+  assert.equal(DEFAULT_CONFIG.live_translation_force_words, 20);
 });
 
 test("browser feature check reports missing capture prerequisites", () => {

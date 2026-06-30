@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     translation_model: str = "gpt-4o-mini"
     transcription_model: str = "gpt-realtime-whisper"
     realtime_transcription_delay: str = "low"
+    live_translation_debounce_ms: int = 2000
+    live_translation_force_words: int = 20
 
     model_config = SettingsConfigDict(
         env_file=".env",

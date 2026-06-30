@@ -67,6 +67,28 @@ def test_browser_app_reports_runtime_metrics():
     assert "setRuntimeState" in app_js
 
 
+def test_browser_app_marks_revisable_live_translation():
+    app_js = (STATIC_DIR / "app.js").read_text()
+    index_html = (STATIC_DIR / "index.html").read_text()
+    styles_css = (STATIC_DIR / "styles.css").read_text()
+
+    assert 'id="live-translation"' in index_html
+    assert "config.live_translation_debounce_ms" in app_js
+    assert "config.live_translation_force_words" in app_js
+    assert "context_source_text" in app_js
+    assert "mode: options.mode" in app_js
+    assert ".live-translation" in styles_css
+
+
+def test_browser_app_commits_realtime_audio_for_automatic_translation():
+    app_js = (STATIC_DIR / "app.js").read_text()
+
+    assert "TRANSCRIPTION_COMMIT_IDLE_MS" in app_js
+    assert "scheduleTranscriptionCommit" in app_js
+    assert "input_audio_buffer.commit" in app_js
+    assert "waitForPendingTranscription" in app_js
+
+
 def test_browser_app_checks_capture_prerequisites():
     app_js = (STATIC_DIR / "app.js").read_text()
     app_core_js = (STATIC_DIR / "app-core.js").read_text()

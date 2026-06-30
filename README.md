@@ -38,6 +38,8 @@ Environment variables use the `FIRETONG_` prefix:
 - `FIRETONG_TRANSLATION_MODEL` default: `gpt-4o-mini`
 - `FIRETONG_TRANSCRIPTION_MODEL` default: `gpt-realtime-whisper`
 - `FIRETONG_REALTIME_TRANSCRIPTION_DELAY` default: `low`
+- `FIRETONG_LIVE_TRANSLATION_DEBOUNCE_MS` default: `2000`
+- `FIRETONG_LIVE_TRANSLATION_FORCE_WORDS` default: `20`
 
 ## Test
 

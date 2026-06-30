@@ -57,6 +57,8 @@ FireTong reads runtime settings from environment variables prefixed with `FIRETO
 - `FIRETONG_TRANSLATION_MODEL` — Translation model (default: `gpt-4o-mini`)
 - `FIRETONG_TRANSCRIPTION_MODEL` — OpenAI Realtime transcription model (default: `gpt-realtime-whisper`)
 - `FIRETONG_REALTIME_TRANSCRIPTION_DELAY` — Realtime transcription latency setting (default: `low`)
+- `FIRETONG_LIVE_TRANSLATION_DEBOUNCE_MS` — Delay before translating recent live transcript text (default: `2000`)
+- `FIRETONG_LIVE_TRANSLATION_FORCE_WORDS` — Word count that forces immediate live translation (default: `20`)
 
 ## API Endpoints
 

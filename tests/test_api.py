@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
-from firetong.main import app, render_prompt
+from firetong.main import app, build_translation_user_message, render_prompt
+from firetong.schemas import TranslationRequest
 from firetong.settings import Settings, get_settings
 
 
@@ -21,6 +22,8 @@ def test_config_reports_openai_model_defaults():
     assert response.json() == {
         "openai_base_url": "https://api.openai.com/v1",
         "translation_model": "gpt-4o-mini",
+        "live_translation_debounce_ms": 2000,
+        "live_translation_force_words": 20,
     }
     app.dependency_overrides.clear()
 
@@ -44,6 +47,23 @@ def test_translation_prompt_renders_from_jinja_template():
     assert "Roh Kudus" in prompt
     assert "{{" not in prompt
     assert "{%" not in prompt
+
+
+def test_translation_user_message_includes_live_context():
+    message = build_translation_user_message(
+        TranslationRequest(
+            source_text="sebab Tuhan",
+            context_source_text="Kalau kita percaya",
+            context_translation="If we believe",
+            mode="draft",
+        )
+    )
+
+    assert "Mode: draft" in message
+    assert "Kalau kita percaya" in message
+    assert "If we believe" in message
+    assert "sebab Tuhan" in message
+    assert "Return only the English translation" in message
 
 
 def test_translate_route_uses_backend_openai_chat_completion(monkeypatch):

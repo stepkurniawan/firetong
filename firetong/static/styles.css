@@ -200,6 +200,30 @@ textarea {
   outline: none;
 }
 
+.live-translation {
+  margin: 0 14px 14px;
+  border-left: 3px solid #1f6feb;
+  border-radius: 6px;
+  background: #eef5ff;
+  color: #123b68;
+  line-height: 1.5;
+  padding: 10px 12px;
+}
+
+.live-translation::before {
+  display: block;
+  margin-bottom: 4px;
+  color: #1f6feb;
+  content: "Live";
+  font-size: 12px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.live-translation[hidden] {
+  display: none;
+}
+
 .log {
   width: min(1200px, 100%);
   min-height: 24px;
