@@ -8,7 +8,7 @@ FireTong (read: "Fire Tongue") MVP: capture shared browser audio, transcribe Ind
 - Browser audio capture with `getDisplayMedia()`.
 - Indonesian speech-to-text through the OpenAI Whisper API via the local backend.
 - Backend translation call to OpenAI `gpt-4o-mini` with a Christian sermon prompt.
-- Silence-gap phrase flushing with a max chunk length fallback.
+- Half-second silence-gap phrase flushing with a max chunk length fallback.
 - Split Indonesian/English panels with auto-scroll, copy, export, and PWA manifest/service worker.
 - Python settings via `pydantic-settings` `BaseSettings`, plus Pytest coverage for config and static app wiring.
 

@@ -46,7 +46,7 @@ http://127.0.0.1:8000
 - Load the page in Chrome or Edge
 - Click **Test OpenAI** to verify backend OpenAI access
 - Click **Capture tab audio** and select the sermon tab with audio enabled
-- The app sends audio chunks to `/api/transcribe`, which uses the OpenAI Whisper API
+- The app sends audio chunks to `/api/transcribe` after about a half-second speech pause, which uses the OpenAI Whisper API
 
 ## Configuration
 

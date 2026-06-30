@@ -112,14 +112,14 @@ def test_transcribe_route_uses_openai_whisper_api(monkeypatch):
 
     response = client.post(
         "/api/transcribe",
-        data={"language": "indonesian"},
+        data={"language": "id"},
         files={"file": ("recording.webm", b"audio-bytes", "audio/webm")},
     )
 
     assert response.status_code == 200
     assert response.json() == {"text": "Tuhan itu baik."}
     assert calls[0]["path"] == "/audio/transcriptions"
-    assert calls[0]["form_data"] == {"model": "whisper-1", "language": "indonesian"}
+    assert calls[0]["form_data"] == {"model": "whisper-1", "language": "id"}
     assert calls[0]["files"]["file"] == ("recording.webm", b"audio-bytes", "audio/webm")
     assert calls[0]["model"] == "whisper-1"
     app.dependency_overrides.clear()

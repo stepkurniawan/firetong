@@ -104,7 +104,7 @@ async def translate_text(
 @app.post("/api/transcribe", response_model=TranscriptionResponse)
 async def transcribe_audio(
     file: UploadFile = File(...),
-    language: str = Form("indonesian"),
+    language: str = Form("id"),
     settings: Settings = Depends(get_settings),
 ) -> TranscriptionResponse:
     file_bytes = await file.read()

@@ -6,8 +6,8 @@ export const DEFAULT_CONFIG = {
 };
 
 export function createPauseDetector({
-  silenceGapMs = 1000,
-  minChunkMs = 1000,
+  silenceGapMs = 500,
+  minChunkMs = 500,
   voiceThreshold = 0.08,
   maxChunkMs,
   now = () => Date.now(),

@@ -12,7 +12,7 @@ def test_browser_app_supports_audio_capture_for_openai_stt():
 
     assert 'id="load-model-button"' not in index_html
     assert "/api/transcribe" in app_js
-    assert 'form.append("language", "indonesian")' in app_js
+    assert 'form.append("language", "id")' in app_js
     assert "decodeToMono16k" not in app_js
     assert "audio/transcriptions" not in app_js
     assert "Xenova" not in app_js

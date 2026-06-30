@@ -18,11 +18,11 @@ test("pause detector flushes after speech followed by a silence gap", () => {
   });
 
   detector.sample(0.12);
-  currentTime = 600;
+  currentTime = 300;
   detector.sample(0.01);
   assert.equal(flushCount, 0);
 
-  currentTime = 1100;
+  currentTime = 500;
   assert.equal(detector.sample(0.01), true);
   assert.equal(flushCount, 1);
 });

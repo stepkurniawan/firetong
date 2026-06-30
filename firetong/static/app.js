@@ -95,7 +95,7 @@ function setCaptureState(isCapturing) {
 async function transcribeAudioBlob(blob) {
   const form = new FormData();
   form.append("file", blob, "recording.webm");
-  form.append("language", "indonesian");
+  form.append("language", "id");
 
   const response = await fetch("/api/transcribe", {
     method: "POST",
