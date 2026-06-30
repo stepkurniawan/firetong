@@ -6,3 +6,15 @@ class AppConfig(BaseModel):
     translation_model: str
     transcription_model: str
     chunk_seconds: int
+
+
+class TranslationRequest(BaseModel):
+    source_text: str
+
+
+class TranslationResponse(BaseModel):
+    translation: str
+
+
+class TranscriptionResponse(BaseModel):
+    text: str

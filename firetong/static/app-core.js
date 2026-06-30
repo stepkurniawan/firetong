@@ -1,16 +1,9 @@
 export const DEFAULT_CONFIG = {
   openai_base_url: "https://api.openai.com/v1",
   translation_model: "gpt-4o-mini",
-  transcription_model: "Xenova/whisper-tiny",
+  transcription_model: "whisper-1",
   chunk_seconds: 5,
 };
-
-export const SERMON_TRANSLATOR_PROMPT = [
-  "You are a professional Christian sermon interpreter.",
-  "Translate Indonesian sermon text to English.",
-  "Preserve theological terms such as Tuhan (Lord), Roh Kudus (Holy Spirit), Anugerah (Grace), Injil (Gospel), and Firman (the Word).",
-  "Be faithful, natural, and concise.",
-].join(" ");
 
 export function createPauseDetector({
   silenceGapMs = 1000,
@@ -53,27 +46,6 @@ export function createPauseDetector({
       heardSpeech = false;
       chunkStartedAt = now();
       lastVoiceAt = chunkStartedAt;
-    },
-  };
-}
-
-export function buildTranslationRequest({ config, apiKey, text }) {
-  return {
-    url: `${config.openai_base_url}/chat/completions`,
-    options: {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: config.translation_model,
-        messages: [
-          { role: "system", content: SERMON_TRANSLATOR_PROMPT },
-          { role: "user", content: text },
-        ],
-        temperature: 0.2,
-      }),
     },
   };
 }

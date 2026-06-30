@@ -10,26 +10,34 @@ def test_browser_app_supports_audio_capture_for_openai_stt():
     app_core_js = (STATIC_DIR / "app-core.js").read_text()
     index_html = (STATIC_DIR / "index.html").read_text()
 
-    assert 'id="load-model-button"' in index_html
-    assert "audio/transcriptions" in app_js
+    assert 'id="load-model-button"' not in index_html
+    assert "/api/transcribe" in app_js
+    assert 'form.append("language", "indonesian")' in app_js
     assert "decodeToMono16k" not in app_js
+    assert "audio/transcriptions" not in app_js
+    assert "Xenova" not in app_js
+    assert "Xenova" not in app_core_js
+    assert "loadModelButton" not in app_js
     assert "createPauseDetector" in app_core_js
     assert "recorder.requestData()" in app_js
-    assert "/api/transcribe" not in app_js
 
 
-def test_browser_app_calls_openai_translation_directly():
+def test_browser_app_calls_backend_translation():
     app_js = (STATIC_DIR / "app.js").read_text()
-    app_core_js = (STATIC_DIR / "app-core.js").read_text()
     index_html = (STATIC_DIR / "index.html").read_text()
 
-    assert "chat/completions" in app_core_js
-    assert "SERMON_TRANSLATOR_PROMPT" in app_core_js
-    assert "firetong.openai_api_key" in app_js
+    assert 'id="api-key"' not in index_html
+    assert 'id="save-key-button"' not in index_html
     assert 'id="test-openai-button"' in index_html
-    assert "testOpenAIConnection" in app_js
+    assert 'id="load-model-button"' not in index_html
+    assert "testServerConnection" in app_js
+    assert "Backend translation test passed." in app_js
+    assert "OpenAI API ready" in app_js
+    assert "config.transcription_model" in app_js
+    assert "config.translation_model" in app_js
     assert "Using built-in browser defaults." in app_js
-    assert "/api/translate" not in app_js
+    assert "/api/translate" in app_js
+    assert "chat/completions" not in app_js
 
 
 def test_browser_app_supports_transcript_export():

@@ -1,15 +1,11 @@
 import {
   DEFAULT_CONFIG,
-  buildTranslationRequest,
   createPauseDetector,
   missingBrowserFeatures,
 } from "./app-core.js";
 
 const apiStatus = document.querySelector("#api-status");
-const apiKeyInput = document.querySelector("#api-key");
-const saveKeyButton = document.querySelector("#save-key-button");
 const testOpenAIButton = document.querySelector("#test-openai-button");
-const loadModelButton = document.querySelector("#load-model-button");
 const captureButton = document.querySelector("#capture-button");
 const stopButton = document.querySelector("#stop-button");
 const translateButton = document.querySelector("#translate-button");
@@ -47,23 +43,6 @@ function recordPhraseLatency(startedAt) {
   lastLatency.textContent = `${((performance.now() - startedAt) / 1000).toFixed(1)}s`;
 }
 
-function savedApiKey() {
-  return localStorage.getItem("firetong.openai_api_key") || "";
-}
-
-function saveApiKey() {
-  const key = apiKeyInput.value.trim();
-  if (key) {
-    localStorage.setItem("firetong.openai_api_key", key);
-    apiStatus.textContent = `Translation ready (${config.translation_model})`;
-    setLog("API key saved in this browser.");
-  } else {
-    localStorage.removeItem("firetong.openai_api_key");
-    apiStatus.textContent = "Add OpenAI key for translation";
-    setLog("API key removed.");
-  }
-}
-
 async function readConfig() {
   try {
     const response = await fetch("/api/config");
@@ -75,10 +54,7 @@ async function readConfig() {
   }
 
   chunkSeconds.value = config.chunk_seconds;
-  apiKeyInput.value = savedApiKey();
-  apiStatus.textContent = savedApiKey()
-    ? `Translation ready (${config.translation_model})`
-    : "Add OpenAI key for translation";
+  apiStatus.textContent = `OpenAI API ready (${config.transcription_model}, ${config.translation_model})`;
   checkBrowserSupport();
 }
 
@@ -92,7 +68,6 @@ function checkBrowserSupport() {
   setRuntimeState("Unsupported");
   setLog(`This browser is missing: ${missing.join(", ")}.`);
   captureButton.disabled = true;
-  loadModelButton.disabled = true;
   return false;
 }
 
@@ -118,21 +93,12 @@ function setCaptureState(isCapturing) {
 }
 
 async function transcribeAudioBlob(blob) {
-  const apiKey = savedApiKey();
-  if (!apiKey) {
-    throw new Error("Add an OpenAI API key to transcribe audio.");
-  }
-
   const form = new FormData();
   form.append("file", blob, "recording.webm");
-  form.append("model", "whisper-1");
   form.append("language", "indonesian");
 
-  const response = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+  const response = await fetch("/api/transcribe", {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-    },
     body: form,
   });
 
@@ -246,16 +212,15 @@ function stopCapture() {
 }
 
 async function translateText(text) {
-  const apiKey = savedApiKey();
-  if (!apiKey) {
-    setLog("Add an OpenAI API key to translate.");
-    return "";
-  }
-
   setLog("Translating...");
 
-  const request = buildTranslationRequest({ config, apiKey, text });
-  const response = await fetch(request.url, request.options);
+  const response = await fetch("/api/translate", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ source_text: text }),
+  });
 
   if (!response.ok) {
     throw new Error(await response.text());
@@ -263,7 +228,7 @@ async function translateText(text) {
 
   const data = await response.json();
   setLog("Translation updated.");
-  return data.choices?.[0]?.message?.content?.trim() || "";
+  return data.translation || "";
 }
 
 async function translateCurrentText() {
@@ -282,15 +247,25 @@ async function translateCurrentText() {
   }
 }
 
-async function testOpenAIConnection() {
+async function testServerConnection() {
   testOpenAIButton.disabled = true;
   try {
-    const translation = await translateText("Tuhan itu baik.");
-    if (translation) {
-      setLog("OpenAI translation test passed.");
+    const response = await fetch("/api/translate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ source_text: "Tuhan itu baik." }),
+    });
+
+    if (response.ok) {
+      setLog("Backend translation test passed.");
+    } else {
+      const message = await response.text();
+      setLog(`Backend translation test failed: ${message}`);
     }
   } catch (error) {
-    setLog(`OpenAI translation test failed: ${error.message}`);
+    setLog(`Backend translation test failed: ${error.message}`);
   } finally {
     testOpenAIButton.disabled = false;
   }
@@ -316,11 +291,6 @@ function exportTranscript() {
   setLog("Exported transcript.");
 }
 
-saveKeyButton.addEventListener("click", saveApiKey);
-testOpenAIButton.addEventListener("click", testOpenAIConnection);
-loadModelButton.addEventListener("click", () => {
-  setLog("OpenAI Whisper API does not require local model loading.");
-});
 captureButton.addEventListener("click", async () => {
   try {
     await startCapture();
@@ -337,6 +307,7 @@ copyButton.addEventListener("click", async () => {
   setLog("Copied translation.");
 });
 exportButton.addEventListener("click", exportTranscript);
+testOpenAIButton.addEventListener("click", testServerConnection);
 
 readConfig().catch((error) => setLog(error.message));
 

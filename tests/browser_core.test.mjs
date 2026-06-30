@@ -3,8 +3,6 @@ import { test } from "node:test";
 
 import {
   DEFAULT_CONFIG,
-  SERMON_TRANSLATOR_PROMPT,
-  buildTranslationRequest,
   createPauseDetector,
   missingBrowserFeatures,
 } from "../firetong/static/app-core.js";
@@ -50,20 +48,10 @@ test("pause detector uses max chunk length as a fallback while speech continues"
   assert.equal(flushCount, 1);
 });
 
-test("translation request preserves the Christian sermon prompt and model", () => {
-  const request = buildTranslationRequest({
-    config: DEFAULT_CONFIG,
-    apiKey: "test-key",
-    text: "Tuhan itu baik.",
-  });
-  const body = JSON.parse(request.options.body);
-
-  assert.equal(request.url, "https://api.openai.com/v1/chat/completions");
-  assert.equal(request.options.headers.Authorization, "Bearer test-key");
-  assert.equal(body.model, "gpt-4o-mini");
-  assert.equal(body.messages[0].content, SERMON_TRANSLATOR_PROMPT);
-  assert.match(body.messages[0].content, /Roh Kudus/);
-  assert.equal(body.messages[1].content, "Tuhan itu baik.");
+test("default config uses OpenAI models for translation and transcription", () => {
+  assert.equal(DEFAULT_CONFIG.openai_base_url, "https://api.openai.com/v1");
+  assert.equal(DEFAULT_CONFIG.translation_model, "gpt-4o-mini");
+  assert.equal(DEFAULT_CONFIG.transcription_model, "whisper-1");
 });
 
 test("browser feature check reports missing capture prerequisites", () => {
