@@ -1,0 +1,13 @@
+{
+  "extends": "@tsconfig/svelte/tsconfig.json",
+  "compilerOptions": {
+    "allowJs": false,
+    "checkJs": false,
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "moduleResolution": "bundler",
+    "strict": true,
+    "types": ["svelte", "vite/client"]
+  },
+  "include": ["frontend/src/**/*.ts", "frontend/src/**/*.svelte"],
+  "references": [{ "path": "./tsconfig.node.json" }]
+}

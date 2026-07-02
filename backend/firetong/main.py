@@ -4,11 +4,11 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from httpx import AsyncClient, HTTPError
 
-from firetong.schemas import (
+from backend.firetong.schemas import (
     AppConfig,
     RealtimeTokenResponse,
 )
-from firetong.settings import Settings, get_settings
+from backend.firetong.settings import Settings, get_settings
 
 
 app = FastAPI(title="FireTong MVP")
@@ -108,5 +108,5 @@ async def create_realtime_token(
     return RealtimeTokenResponse(value=client_secret)
 
 
-static_dir = Path(__file__).parent / "static"
+static_dir = Path(__file__).parents[1] / "static"
 app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")

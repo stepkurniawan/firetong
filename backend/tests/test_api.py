@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
-from firetong.main import app
-from firetong.settings import Settings, get_settings
+from backend.firetong.main import app
+from backend.firetong.settings import Settings, get_settings
 
 
 def override_settings(**values):
@@ -48,7 +48,7 @@ def test_realtime_translation_token_route_creates_translation_session(monkeypatc
         )
         return {"value": "translation-secret"}
 
-    monkeypatch.setattr("firetong.main.post_to_openai", fake_post_to_openai)
+    monkeypatch.setattr("backend.firetong.main.post_to_openai", fake_post_to_openai)
     app.dependency_overrides[get_settings] = override_settings(openai_api_key="test-key")
     client = TestClient(app)
 
@@ -86,7 +86,7 @@ def test_realtime_token_route_creates_transcription_session(monkeypatch):
         )
         return {"value": "ephemeral-secret"}
 
-    monkeypatch.setattr("firetong.main.post_to_openai", fake_post_to_openai)
+    monkeypatch.setattr("backend.firetong.main.post_to_openai", fake_post_to_openai)
     app.dependency_overrides[get_settings] = override_settings(openai_api_key="test-key")
     client = TestClient(app)
 

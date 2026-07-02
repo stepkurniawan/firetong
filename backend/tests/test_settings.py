@@ -1,4 +1,4 @@
-from firetong.settings import Settings
+from backend.firetong.settings import Settings
 
 
 def test_settings_read_firetong_environment(monkeypatch):

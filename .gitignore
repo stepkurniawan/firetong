@@ -203,6 +203,10 @@ cython_debug/
 # Temporary file for partial code execution
 tempCodeRunnerFile.py
 
+# Frontend dependencies and local Vite output
+node_modules/
+.svelte-kit/
+
 # Ruff stuff:
 .ruff_cache/
 
