@@ -18,28 +18,35 @@ const phraseCount = document.querySelector("#phrase-count");
 const lastLatency = document.querySelector("#last-latency");
 const log = document.querySelector("#log");
 
-const LIVE_TRANSLATION_COMMIT_MS = 2000;
-const TRANSLATION_CONTEXT_CHARS = 1200;
+const PHRASE_BOUNDARY_PATTERN = /[.!?。！？]/;
 const TRANSCRIPTION_COMMIT_IDLE_MS = 900;
 
 let config = { ...DEFAULT_CONFIG };
 let stream = null;
 let peerConnection = null;
 let realtimeChannel = null;
-let translationPeerConnection = null;
-let translationRealtimeChannel = null;
+let transcriptionPeerConnection = null;
+let transcriptionRealtimeChannel = null;
 let audioContext = null;
 let meterFrame = null;
 let completedPhraseCount = 0;
-let sourceFinalText = "";
-let interimSegments = new Map();
-let stableTranslationText = "";
-let liveDraftTranslation = "";
-let translationBuffer = [];
-let translationTimer = null;
-let translationInFlight = false;
-let translationNeedsRerun = false;
+let phraseStartedAt = null;
 let transcriptionCommitTimer = null;
+let transcriptionItems = new Map();
+let sourceFromTranscription = false;
+let sourceTranscript = "";
+let translatedTranscript = "";
+
+function addAudioSendTrack(peerConnectionToUpdate, audioTrack, audioStream) {
+  peerConnectionToUpdate.addTransceiver(audioTrack, {
+    direction: "sendonly",
+    streams: [audioStream],
+  });
+}
+
+function forceSendOnlyAudioSdp(sdp) {
+  return sdp.replaceAll("a=sendrecv", "a=sendonly").replaceAll("a=recvonly", "a=inactive");
+}
 
 function setLog(message) {
   log.textContent = message;
@@ -49,10 +56,75 @@ function setRuntimeState(state) {
   captureState.textContent = state;
 }
 
+function setCaptureState(isCapturing) {
+  captureButton.disabled = isCapturing;
+  stopButton.disabled = !isCapturing;
+}
+
+function renderTranscripts() {
+  sourceText.value = sourceTranscript.trimStart();
+  translatedText.value = translatedTranscript.trimStart();
+  sourceText.scrollTop = sourceText.scrollHeight;
+  translatedText.scrollTop = translatedText.scrollHeight;
+  liveTranslation.hidden = true;
+  liveTranslation.textContent = "";
+}
+
+function resetRealtimeState() {
+  sourceTranscript = sourceText.value.trim();
+  translatedTranscript = translatedText.value.trim();
+  phraseStartedAt = null;
+  transcriptionItems = new Map();
+  sourceFromTranscription = false;
+  renderTranscripts();
+}
+
 function recordPhraseLatency(startedAt) {
   completedPhraseCount += 1;
   phraseCount.textContent = String(completedPhraseCount);
   lastLatency.textContent = `${((performance.now() - startedAt) / 1000).toFixed(1)}s`;
+}
+
+function markSourceProgress(delta) {
+  if (!delta) return;
+
+  if (!phraseStartedAt) phraseStartedAt = performance.now();
+  sourceTranscript = `${sourceTranscript}${delta}`;
+  renderTranscripts();
+
+  if (PHRASE_BOUNDARY_PATTERN.test(delta)) {
+    recordPhraseLatency(phraseStartedAt);
+    phraseStartedAt = null;
+  }
+}
+
+function appendTranslatedText(delta) {
+  if (!delta) return;
+
+  translatedTranscript = `${translatedTranscript}${delta}`;
+  renderTranscripts();
+}
+
+function commitTranscriptionBuffer() {
+  if (!transcriptionRealtimeChannel || transcriptionRealtimeChannel.readyState !== "open") return;
+
+  transcriptionRealtimeChannel.send(
+    JSON.stringify({
+      type: "input_audio_buffer.commit",
+    }),
+  );
+}
+
+function scheduleTranscriptionCommit() {
+  if (transcriptionCommitTimer) clearTimeout(transcriptionCommitTimer);
+
+  transcriptionCommitTimer = setTimeout(() => {
+    transcriptionCommitTimer = null;
+    commitTranscriptionBuffer();
+    if (transcriptionRealtimeChannel?.readyState === "open") {
+      scheduleTranscriptionCommit();
+    }
+  }, TRANSCRIPTION_COMMIT_IDLE_MS);
 }
 
 async function readConfig() {
@@ -65,7 +137,7 @@ async function readConfig() {
     setLog("Using built-in browser defaults.");
   }
 
-  apiStatus.textContent = `OpenAI API ready (live translation, ${config.translation_model})`;
+  apiStatus.textContent = `OpenAI API ready (${config.realtime_translation_model})`;
   checkBrowserSupport();
 }
 
@@ -82,71 +154,8 @@ function checkBrowserSupport() {
   return false;
 }
 
-function appendSource(text) {
-  const cleanText = text.trim();
-  if (!cleanText) return;
-
-  sourceText.value = `${sourceText.value}${sourceText.value ? "\n" : ""}${cleanText}`;
-  sourceFinalText = sourceText.value.trim();
-  sourceText.scrollTop = sourceText.scrollHeight;
-}
-
-function appendTranslation(text) {
-  const cleanText = text.trim();
-  if (!cleanText) return;
-
-  stableTranslationText = `${stableTranslationText}${stableTranslationText ? "\n" : ""}${cleanText}`;
-  renderTranslation();
-}
-
-function renderTranslation() {
-  translatedText.value = stableTranslationText;
-  translatedText.scrollTop = translatedText.scrollHeight;
-  liveTranslation.textContent = liveDraftTranslation;
-  liveTranslation.hidden = !liveDraftTranslation;
-}
-
 function getFullTranslationText() {
-  return [stableTranslationText, liveDraftTranslation].filter(Boolean).join("\n");
-}
-
-function resetLiveTranslationState() {
-  if (translationTimer) clearTimeout(translationTimer);
-  if (transcriptionCommitTimer) clearTimeout(transcriptionCommitTimer);
-  translationTimer = null;
-  transcriptionCommitTimer = null;
-  translationInFlight = false;
-  translationNeedsRerun = false;
-  translationBuffer = [];
-  liveDraftTranslation = "";
-  stableTranslationText = translatedText.value.trim();
-  renderTranslation();
-}
-
-function setCaptureState(isCapturing) {
-  captureButton.disabled = isCapturing;
-  stopButton.disabled = !isCapturing;
-}
-
-function stopMeter() {
-  if (meterFrame) cancelAnimationFrame(meterFrame);
-  if (audioContext) audioContext.close();
-  meterFrame = null;
-  audioContext = null;
-  meterBar.style.width = "0%";
-}
-
-async function fetchRealtimeToken() {
-  const response = await fetch("/api/realtime/token");
-  if (!response.ok) {
-    throw new Error(await response.text());
-  }
-
-  const data = await response.json();
-  if (!data.value) {
-    throw new Error("Realtime token response did not include a client secret.");
-  }
-  return data.value;
+  return translatedTranscript.trim();
 }
 
 async function fetchRealtimeTranslationToken() {
@@ -162,227 +171,115 @@ async function fetchRealtimeTranslationToken() {
   return data.value;
 }
 
-function renderLiveSource() {
-  const interimText = [...interimSegments.values()]
-    .map((segment) => segment.text.trim())
-    .filter(Boolean)
-    .join("\n");
-  sourceText.value = [sourceFinalText, interimText].filter(Boolean).join("\n");
-  sourceText.scrollTop = sourceText.scrollHeight;
-}
-
-function appendDraftTranslation(delta) {
-  if (!delta) return;
-
-  liveDraftTranslation = `${liveDraftTranslation}${delta}`;
-  renderTranslation();
-}
-
-function upsertInterimSegment(itemId, delta) {
-  const segment = interimSegments.get(itemId) || {
-    text: "",
-    startedAt: performance.now(),
-  };
-  segment.text = `${segment.text}${delta}`;
-  interimSegments.set(itemId, segment);
-  renderLiveSource();
-  scheduleTranscriptionCommit();
-}
-
-function countWords(text) {
-  return text.trim().split(/\s+/).filter(Boolean).length;
-}
-
-function bufferedSourceText() {
-  return translationBuffer.map((segment) => segment.text).join(" ").trim();
-}
-
-function hasStrongBoundary(text) {
-  return /[.!?。！？]\s*$/.test(text.trim());
-}
-
-function shouldCommitBuffer(buffer, now = performance.now()) {
-  if (buffer.length === 0) return false;
-
-  const text = buffer.map((segment) => segment.text).join(" ");
-  const oldestCompletedAt = buffer[0].completedAt;
-  return hasStrongBoundary(text) || now - oldestCompletedAt >= LIVE_TRANSLATION_COMMIT_MS;
-}
-
-function translationContext(text) {
-  return text.slice(Math.max(0, text.length - TRANSLATION_CONTEXT_CHARS));
-}
-
-function removeTranslatedSnapshot(snapshotText) {
-  const snapshotSegments = snapshotText.split("\n");
-  translationBuffer = translationBuffer.slice(snapshotSegments.length);
-}
-
-function wait(ms) {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
-
-function queueLiveTranslation(text) {
-  const cleanText = text.trim();
-  if (!cleanText) return;
-
-  translationBuffer.push({
-    text: cleanText,
-    completedAt: performance.now(),
-  });
-
-  const wordCount = countWords(bufferedSourceText());
-  const delay =
-    wordCount >= config.live_translation_force_words ? 0 : config.live_translation_debounce_ms;
-  scheduleLiveTranslation(delay);
-}
-
-function scheduleLiveTranslation(delay = config.live_translation_debounce_ms) {
-  if (translationTimer) clearTimeout(translationTimer);
-  translationTimer = setTimeout(() => {
-    translationTimer = null;
-    translateLiveBuffer().catch((error) => {
-      setRuntimeState("Error");
-      setLog(error.message);
-    });
-  }, delay);
-}
-
-function scheduleTranscriptionCommit() {
-  if (transcriptionCommitTimer) clearTimeout(transcriptionCommitTimer);
-  transcriptionCommitTimer = setTimeout(() => {
-    transcriptionCommitTimer = null;
-    commitTranscriptionBuffer();
-  }, TRANSCRIPTION_COMMIT_IDLE_MS);
-}
-
-function commitTranscriptionBuffer() {
-  if (!realtimeChannel || realtimeChannel.readyState !== "open") return;
-  if (interimSegments.size === 0) return;
-
-  realtimeChannel.send(
-    JSON.stringify({
-      type: "input_audio_buffer.commit",
-    }),
-  );
-}
-
-async function waitForPendingTranscription(maxWaitMs = 1500) {
-  const startedAt = performance.now();
-  while (interimSegments.size > 0 && performance.now() - startedAt < maxWaitMs) {
-    await wait(50);
-  }
-}
-
-async function queueRemainingInterimSegments() {
-  const remainingSegments = [...interimSegments.entries()];
-  for (const [itemId, segment] of remainingSegments) {
-    await finalizeInterimSegment(itemId, segment.text);
-  }
-}
-
-async function translateLiveBuffer({ finalize = false } = {}) {
-  if (translationInFlight) {
-    translationNeedsRerun = true;
-    return;
+async function fetchRealtimeToken() {
+  const response = await fetch("/api/realtime/token");
+  if (!response.ok) {
+    throw new Error(await response.text());
   }
 
-  const sourceToTranslate = bufferedSourceText();
-  if (!sourceToTranslate) return;
-
-  translationInFlight = true;
-  setRuntimeState("Translating");
-
-  try {
-    const snapshot = [...translationBuffer];
-    const snapshotText = snapshot.map((segment) => segment.text).join("\n");
-    const translation = await translateText(snapshotText, {
-      contextSourceText: translationContext(sourceFinalText.replace(snapshotText, "")),
-      contextTranslation: translationContext(stableTranslationText),
-      mode: finalize || shouldCommitBuffer(snapshot) ? "final" : "draft",
-    });
-
-    if (finalize || shouldCommitBuffer(snapshot)) {
-      appendTranslation(translation);
-      liveDraftTranslation = "";
-      removeTranslatedSnapshot(snapshotText);
-    } else {
-      liveDraftTranslation = translation.trim();
-    }
-    renderTranslation();
-
-    if (peerConnection) setRuntimeState("Live");
-  } finally {
-    translationInFlight = false;
+  const data = await response.json();
+  if (!data.value) {
+    throw new Error("Realtime token response did not include a client secret.");
   }
-
-  if (translationNeedsRerun) {
-    translationNeedsRerun = false;
-    scheduleLiveTranslation(0);
-  }
+  return data.value;
 }
 
-async function finalizeLiveTranslation() {
-  if (translationTimer) clearTimeout(translationTimer);
-  if (transcriptionCommitTimer) clearTimeout(transcriptionCommitTimer);
-  translationTimer = null;
-  transcriptionCommitTimer = null;
-  commitTranscriptionBuffer();
-  await waitForPendingTranscription();
-
-  if (interimSegments.size > 0) {
-    await queueRemainingInterimSegments();
-  }
-
-  while (translationInFlight) {
-    translationNeedsRerun = false;
-    await wait(50);
-  }
-
-  if (!bufferedSourceText()) {
-    if (liveDraftTranslation) {
-      appendTranslation(liveDraftTranslation);
-      liveDraftTranslation = "";
-      renderTranslation();
-    }
-    return;
-  }
-
-  await translateLiveBuffer({ finalize: true });
-}
-
-async function finalizeInterimSegment(itemId, transcript) {
-  const segment = interimSegments.get(itemId);
-  const startedAt = segment?.startedAt || performance.now();
-  const cleanTranscript = (transcript || segment?.text || "").trim();
-  interimSegments.delete(itemId);
-
-  if (!cleanTranscript) {
-    renderLiveSource();
-    return;
-  }
-
-  sourceFinalText = `${sourceFinalText}${sourceFinalText ? "\n" : ""}${cleanTranscript}`;
-  renderLiveSource();
-  recordPhraseLatency(startedAt);
-  queueLiveTranslation(cleanTranscript);
-}
-
-function handleRealtimeEvent(event) {
+function handleRealtimeTranscriptionEvent(event) {
   if (event.type === "conversation.item.input_audio_transcription.delta") {
-    upsertInterimSegment(event.item_id, event.delta || "");
+    sourceFromTranscription = true;
+    const itemId = event.item_id || "current";
+    const currentText = transcriptionItems.get(itemId) || "";
+    transcriptionItems.set(itemId, `${currentText}${event.delta || ""}`);
+    markSourceProgress(event.delta || "");
   }
 
   if (event.type === "conversation.item.input_audio_transcription.completed") {
-    finalizeInterimSegment(event.item_id, event.transcript || "");
+    sourceFromTranscription = true;
+    const itemId = event.item_id || "current";
+    const currentText = (transcriptionItems.get(itemId) || "").trim();
+    const transcript = (event.transcript || "").trim();
+    if (!currentText && transcript) {
+      markSourceProgress(transcript);
+    }
+    transcriptionItems.delete(itemId);
+
+    if (phraseStartedAt) {
+      recordPhraseLatency(phraseStartedAt);
+      phraseStartedAt = null;
+    }
   }
 
   if (event.type === "error") {
     setRuntimeState("Error");
-    setLog(event.error?.message || "Realtime audio translation failed.");
+    setLog(event.error?.message || "Realtime transcription failed.");
   }
+}
+
+function handleRealtimeTranslationEvent(event) {
+  if (event.type === "session.input_transcript.delta" && !sourceFromTranscription) {
+    markSourceProgress(event.delta || "");
+  }
+
+  if (event.type === "session.output_transcript.delta") {
+    appendTranslatedText(event.delta || "");
+  }
+
+  if (event.type === "session.closed") {
+    setRuntimeState("Stopped");
+  }
+
+  if (event.type === "error") {
+    setRuntimeState("Error");
+    setLog(event.error?.message || "Realtime translation failed.");
+  }
+}
+
+async function startRealtimeTranscription(audioTracks) {
+  const realtimeToken = await fetchRealtimeToken();
+  const audioTrack = audioTracks[0].clone();
+  const audioStream = new MediaStream([audioTrack]);
+
+  transcriptionPeerConnection = new RTCPeerConnection();
+  addAudioSendTrack(transcriptionPeerConnection, audioTrack, audioStream);
+
+  transcriptionRealtimeChannel = transcriptionPeerConnection.createDataChannel("oai-events");
+  transcriptionRealtimeChannel.addEventListener("open", scheduleTranscriptionCommit);
+  transcriptionRealtimeChannel.addEventListener("message", (event) => {
+    handleRealtimeTranscriptionEvent(JSON.parse(event.data));
+  });
+  transcriptionRealtimeChannel.addEventListener("error", () => {
+    setRuntimeState("Error");
+    setLog("Realtime transcription channel failed.");
+  });
+
+  transcriptionPeerConnection.addEventListener("connectionstatechange", () => {
+    if (transcriptionPeerConnection.connectionState === "failed") {
+      setRuntimeState("Error");
+      setLog("Realtime transcription connection failed.");
+    }
+  });
+
+  const offer = await transcriptionPeerConnection.createOffer();
+  offer.sdp = forceSendOnlyAudioSdp(offer.sdp);
+  await transcriptionPeerConnection.setLocalDescription(offer);
+
+  const sdpResponse = await fetch(`${config.openai_base_url}/realtime/calls`, {
+    method: "POST",
+    body: offer.sdp,
+    headers: {
+      Authorization: `Bearer ${realtimeToken}`,
+      "Content-Type": "application/sdp",
+    },
+  });
+
+  if (!sdpResponse.ok) {
+    throw new Error(await sdpResponse.text());
+  }
+
+  await transcriptionPeerConnection.setRemoteDescription({
+    type: "answer",
+    sdp: await sdpResponse.text(),
+  });
 }
 
 function startMeter(activeStream) {
@@ -404,26 +301,37 @@ function startMeter(activeStream) {
   tick();
 }
 
-async function startRealtimeCapture(activeStream, audioTracks) {
-  setRuntimeState("Connecting");
-  setLog("Connecting live translation...");
+function stopMeter() {
+  if (meterFrame) cancelAnimationFrame(meterFrame);
+  if (audioContext) audioContext.close();
+  meterFrame = null;
+  audioContext = null;
+  meterBar.style.width = "0%";
+}
 
-  const realtimeToken = await fetchRealtimeToken();
-  const audioStream = new MediaStream(audioTracks);
-  startMeter(audioStream);
+async function startRealtimeTranslation(audioTracks) {
+  setRuntimeState("Connecting");
+  setLog("Connecting OpenAI Realtime translation...");
+
+  const translationToken = await fetchRealtimeTranslationToken();
+  const audioTrack = audioTracks[0].clone();
+  const audioStream = new MediaStream([audioTrack]);
+  startMeter(new MediaStream(audioTracks));
 
   peerConnection = new RTCPeerConnection();
+  addAudioSendTrack(peerConnection, audioTrack, audioStream);
+
   realtimeChannel = peerConnection.createDataChannel("oai-events");
   realtimeChannel.addEventListener("open", () => {
     setRuntimeState("Live");
-    setLog("Live translation is running.");
+    setLog("Realtime translation is running.");
   });
   realtimeChannel.addEventListener("message", (event) => {
-    handleRealtimeEvent(JSON.parse(event.data));
+    handleRealtimeTranslationEvent(JSON.parse(event.data));
   });
   realtimeChannel.addEventListener("error", () => {
     setRuntimeState("Error");
-    setLog("Realtime audio translation channel failed.");
+    setLog("Realtime translation channel failed.");
   });
 
   peerConnection.addEventListener("connectionstatechange", () => {
@@ -438,62 +346,13 @@ async function startRealtimeCapture(activeStream, audioTracks) {
     }
     if (peerConnection.connectionState === "failed") {
       setRuntimeState("Error");
-      setLog("Realtime connection failed.");
+      setLog("Realtime translation connection failed.");
     }
   });
-
-  peerConnection.addTrack(audioTracks[0], audioStream);
 
   const offer = await peerConnection.createOffer();
+  offer.sdp = forceSendOnlyAudioSdp(offer.sdp);
   await peerConnection.setLocalDescription(offer);
-
-  const sdpResponse = await fetch(`${config.openai_base_url}/realtime/calls`, {
-    method: "POST",
-    body: offer.sdp,
-    headers: {
-      Authorization: `Bearer ${realtimeToken}`,
-      "Content-Type": "application/sdp",
-    },
-  });
-
-  if (!sdpResponse.ok) {
-    throw new Error(await sdpResponse.text());
-  }
-
-  await peerConnection.setRemoteDescription({
-    type: "answer",
-    sdp: await sdpResponse.text(),
-  });
-
-  setCaptureState(true);
-}
-
-async function startRealtimeTranslationDraft(audioTracks) {
-  const translationToken = await fetchRealtimeTranslationToken();
-  const audioStream = new MediaStream(audioTracks);
-
-  translationPeerConnection = new RTCPeerConnection();
-  translationRealtimeChannel = translationPeerConnection.createDataChannel("oai-events");
-  translationRealtimeChannel.addEventListener("message", (event) => {
-    const realtimeEvent = JSON.parse(event.data);
-    if (realtimeEvent.type === "session.output_transcript.delta") {
-      appendDraftTranslation(realtimeEvent.delta || "");
-    }
-  });
-  translationRealtimeChannel.addEventListener("error", () => {
-    setLog("Realtime draft translation channel failed.");
-  });
-
-  translationPeerConnection.addEventListener("connectionstatechange", () => {
-    if (translationPeerConnection.connectionState === "failed") {
-      setLog("Realtime draft translation connection failed.");
-    }
-  });
-
-  translationPeerConnection.addTrack(audioTracks[0], audioStream);
-
-  const offer = await translationPeerConnection.createOffer();
-  await translationPeerConnection.setLocalDescription(offer);
 
   const sdpResponse = await fetch(`${config.openai_base_url}/realtime/translations/calls`, {
     method: "POST",
@@ -508,7 +367,7 @@ async function startRealtimeTranslationDraft(audioTracks) {
     throw new Error(await sdpResponse.text());
   }
 
-  await translationPeerConnection.setRemoteDescription({
+  await peerConnection.setRemoteDescription({
     type: "answer",
     sdp: await sdpResponse.text(),
   });
@@ -528,101 +387,67 @@ async function startCapture() {
     throw new Error("No audio track was shared. Choose a tab/window and enable audio sharing.");
   }
 
-  sourceFinalText = sourceText.value.trim();
-  interimSegments = new Map();
-  resetLiveTranslationState();
+  resetRealtimeState();
 
   try {
     await Promise.all([
-      startRealtimeCapture(stream, audioTracks),
-      startRealtimeTranslationDraft(audioTracks),
+      startRealtimeTranscription(audioTracks),
+      startRealtimeTranslation(audioTracks),
     ]);
+    setCaptureState(true);
   } catch (error) {
-    if (translationRealtimeChannel) translationRealtimeChannel.close();
-    if (realtimeChannel) realtimeChannel.close();
-    if (translationPeerConnection) translationPeerConnection.close();
-    if (peerConnection) peerConnection.close();
-    translationRealtimeChannel = null;
-    realtimeChannel = null;
-    translationPeerConnection = null;
-    peerConnection = null;
-    stopMeter();
-    if (stream) stream.getTracks().forEach((track) => track.stop());
-    stream = null;
+    cleanupCapture();
     throw error;
   }
 }
 
-async function stopCapture() {
-  try {
-    await finalizeLiveTranslation();
-  } catch (error) {
-    setRuntimeState("Error");
-    setLog(error.message);
+function cleanupCapture() {
+  if (transcriptionCommitTimer) clearTimeout(transcriptionCommitTimer);
+  if (peerConnection) {
+    peerConnection.getSenders().forEach((sender) => sender.track?.stop());
   }
-
+  if (transcriptionPeerConnection) {
+    transcriptionPeerConnection.getSenders().forEach((sender) => sender.track?.stop());
+  }
   if (realtimeChannel) realtimeChannel.close();
-  if (translationRealtimeChannel) translationRealtimeChannel.close();
+  if (transcriptionRealtimeChannel) transcriptionRealtimeChannel.close();
   if (peerConnection) peerConnection.close();
-  if (translationPeerConnection) translationPeerConnection.close();
+  if (transcriptionPeerConnection) transcriptionPeerConnection.close();
   stopMeter();
   if (stream) stream.getTracks().forEach((track) => track.stop());
   realtimeChannel = null;
-  translationRealtimeChannel = null;
+  transcriptionRealtimeChannel = null;
+  transcriptionCommitTimer = null;
   peerConnection = null;
-  translationPeerConnection = null;
+  transcriptionPeerConnection = null;
+  transcriptionItems = new Map();
+  sourceFromTranscription = false;
   stream = null;
-  interimSegments = new Map();
-  sourceFinalText = sourceText.value.trim();
+}
+
+async function stopCapture() {
+  cleanupCapture();
   setCaptureState(false);
   setRuntimeState("Stopped");
   setLog("Capture stopped.");
 }
 
-async function translateText(text, options = {}) {
-  setLog("Translating...");
-
-  const response = await fetch("/api/translate", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      source_text: text,
-      context_source_text: options.contextSourceText || "",
-      context_translation: options.contextTranslation || "",
-      mode: options.mode || "final",
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(await response.text());
-  }
-
-  const data = await response.json();
-  setLog("Translation updated.");
-  return data.translation || "";
-}
-
 async function testServerConnection() {
   testOpenAIButton.disabled = true;
   try {
-    const response = await fetch("/api/translate", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ source_text: "Tuhan itu baik." }),
-    });
+    const [transcriptionResponse, translationResponse] = await Promise.all([
+      fetch("/api/realtime/token"),
+      fetch("/api/realtime/translation-token"),
+    ]);
 
-    if (response.ok) {
-      setLog("Backend translation test passed.");
+    if (transcriptionResponse.ok && translationResponse.ok) {
+      setLog("Realtime transcription and translation test passed.");
     } else {
-      const message = await response.text();
-      setLog(`Backend translation test failed: ${message}`);
+      const message = await (transcriptionResponse.ok ? translationResponse : transcriptionResponse).text();
+      setLog(`Realtime transcription/translation test failed: ${message}`);
     }
   } catch (error) {
-    setLog(`Backend translation test failed: ${error.message}`);
+    setLog(`Realtime transcription/translation test failed: ${error.message}`);
   } finally {
     testOpenAIButton.disabled = false;
   }

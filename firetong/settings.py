@@ -7,13 +7,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     openai_base_url: AnyHttpUrl = "https://api.openai.com/v1"
     openai_api_key: str | None = None
-    translation_model: str = "gpt-5.4-nano"
     transcription_model: str = "gpt-realtime-whisper"
     realtime_translation_model: str = "gpt-realtime-translate"
     realtime_translation_language: str = "en"
     realtime_transcription_delay: str = "low"
-    live_translation_debounce_ms: int = 500
-    live_translation_force_words: int = 20
 
     model_config = SettingsConfigDict(
         env_file=".env",

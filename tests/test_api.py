@@ -1,7 +1,6 @@
 from fastapi.testclient import TestClient
 
-from firetong.main import app, build_translation_user_message, render_prompt
-from firetong.schemas import TranslationRequest
+from firetong.main import app
 from firetong.settings import Settings, get_settings
 
 
@@ -21,54 +20,21 @@ def test_config_reports_openai_model_defaults():
     assert response.status_code == 200
     assert response.json() == {
         "openai_base_url": "https://api.openai.com/v1",
-        "translation_model": "gpt-5.4-nano",
         "realtime_translation_model": "gpt-realtime-translate",
         "realtime_translation_language": "en",
-        "live_translation_debounce_ms": 500,
-        "live_translation_force_words": 20,
     }
     app.dependency_overrides.clear()
 
 
-def test_server_exposes_translation_route():
+def test_server_replaces_backend_translation_route():
     client = TestClient(app)
 
     response = client.post("/api/translate", json={})
 
-    assert response.status_code == 422
+    assert response.status_code == 405
 
 
-def test_translation_prompt_renders_from_jinja_template():
-    prompt = render_prompt(
-        "translation_system.jinja2",
-        source_language="Indonesian",
-        target_language="English",
-    )
-
-    assert "Translate Indonesian sermon text to English." in prompt
-    assert "Roh Kudus" in prompt
-    assert "{{" not in prompt
-    assert "{%" not in prompt
-
-
-def test_translation_user_message_includes_live_context():
-    message = build_translation_user_message(
-        TranslationRequest(
-            source_text="sebab Tuhan",
-            context_source_text="Kalau kita percaya",
-            context_translation="If we believe",
-            mode="draft",
-        )
-    )
-
-    assert "Mode: draft" in message
-    assert "Kalau kita percaya" in message
-    assert "If we believe" in message
-    assert "sebab Tuhan" in message
-    assert "Return only the English translation" in message
-
-
-def test_translate_route_uses_backend_openai_chat_completion(monkeypatch):
+def test_realtime_translation_token_route_creates_translation_session(monkeypatch):
     calls = []
 
     async def fake_post_to_openai(settings, path, json_data=None, form_data=None, files=None):
@@ -77,36 +43,32 @@ def test_translate_route_uses_backend_openai_chat_completion(monkeypatch):
                 "path": path,
                 "json_data": json_data,
                 "files": files,
-                "model": settings.translation_model,
+                "model": settings.realtime_translation_model,
             }
         )
-        return {
-            "choices": [
-                {
-                    "message": {
-                        "content": "God is good.",
-                    }
-                }
-            ]
-        }
+        return {"value": "translation-secret"}
 
     monkeypatch.setattr("firetong.main.post_to_openai", fake_post_to_openai)
     app.dependency_overrides[get_settings] = override_settings(openai_api_key="test-key")
     client = TestClient(app)
 
-    response = client.post("/api/translate", json={"source_text": "Tuhan itu baik."})
+    response = client.get("/api/realtime/translation-token")
 
     assert response.status_code == 200
-    assert response.json() == {"translation": "God is good."}
-    assert calls[0]["path"] == "/chat/completions"
-    assert calls[0]["json_data"]["model"] == "gpt-5.4-nano"
-    assert calls[0]["json_data"]["messages"][1] == {
-        "role": "user",
-        "content": "Tuhan itu baik.",
+    assert response.json() == {"value": "translation-secret"}
+    assert calls[0]["path"] == "/realtime/translations/client_secrets"
+    assert calls[0]["json_data"] == {
+        "session": {
+            "model": "gpt-realtime-translate",
+            "audio": {
+                "output": {
+                    "language": "en",
+                },
+            },
+        }
     }
-    assert "Roh Kudus" in calls[0]["json_data"]["messages"][0]["content"]
     assert calls[0]["files"] is None
-    assert calls[0]["model"] == "gpt-5.4-nano"
+    assert calls[0]["model"] == "gpt-realtime-translate"
     app.dependency_overrides.clear()
 
 
@@ -153,54 +115,13 @@ def test_realtime_token_route_creates_transcription_session(monkeypatch):
     app.dependency_overrides.clear()
 
 
-def test_realtime_translation_token_route_creates_translation_session(monkeypatch):
-    calls = []
-
-    async def fake_post_to_openai(settings, path, json_data=None, form_data=None, files=None):
-        calls.append(
-            {
-                "path": path,
-                "json_data": json_data,
-                "files": files,
-                "model": settings.realtime_translation_model,
-            }
-        )
-        return {"value": "translation-secret"}
-
-    monkeypatch.setattr("firetong.main.post_to_openai", fake_post_to_openai)
-    app.dependency_overrides[get_settings] = override_settings(openai_api_key="test-key")
-    client = TestClient(app)
-
-    response = client.get("/api/realtime/translation-token")
-
-    assert response.status_code == 200
-    assert response.json() == {"value": "translation-secret"}
-    assert calls[0]["path"] == "/realtime/translations/client_secrets"
-    assert calls[0]["json_data"] == {
-        "session": {
-            "model": "gpt-realtime-translate",
-            "audio": {
-                "output": {
-                    "language": "en",
-                },
-            },
-        }
-    }
-    assert calls[0]["files"] is None
-    assert calls[0]["model"] == "gpt-realtime-translate"
-    app.dependency_overrides.clear()
-
-
 def test_openai_routes_require_server_api_key():
     app.dependency_overrides[get_settings] = override_settings(openai_api_key=None)
     client = TestClient(app)
 
-    response = client.post("/api/translate", json={"source_text": "Tuhan itu baik."})
     realtime_response = client.get("/api/realtime/token")
     realtime_translation_response = client.get("/api/realtime/translation-token")
 
-    assert response.status_code == 503
-    assert response.json() == {"detail": "OpenAI API key is not configured on the server."}
     assert realtime_response.status_code == 503
     assert realtime_response.json() == {"detail": "OpenAI API key is not configured on the server."}
     assert realtime_translation_response.status_code == 503

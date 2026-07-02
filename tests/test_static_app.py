@@ -5,7 +5,7 @@ import json
 STATIC_DIR = Path("firetong/static")
 
 
-def test_browser_app_supports_audio_capture_for_openai_stt():
+def test_browser_app_supports_audio_capture_for_openai_realtime_translation():
     app_js = (STATIC_DIR / "app.js").read_text()
     app_core_js = (STATIC_DIR / "app-core.js").read_text()
     index_html = (STATIC_DIR / "index.html").read_text()
@@ -18,6 +18,7 @@ def test_browser_app_supports_audio_capture_for_openai_stt():
     assert "conversation.item.input_audio_transcription.delta" in app_js
     assert "conversation.item.input_audio_transcription.completed" in app_js
     assert "session.output_transcript.delta" in app_js
+    assert "session.input_transcript.delta" in app_js
     assert "/realtime/translations/calls" in app_js
     assert "/api/transcribe" not in app_js
     assert 'form.append("language", "id")' not in app_js
@@ -33,7 +34,7 @@ def test_browser_app_supports_audio_capture_for_openai_stt():
     assert 'id="chunk-seconds"' not in index_html
 
 
-def test_browser_app_calls_backend_translation():
+def test_browser_app_uses_realtime_translation_only():
     app_js = (STATIC_DIR / "app.js").read_text()
     index_html = (STATIC_DIR / "index.html").read_text()
 
@@ -45,14 +46,37 @@ def test_browser_app_calls_backend_translation():
     assert 'id="load-model-button"' not in index_html
     assert "testServerConnection" in app_js
     assert "translateCurrentText" not in app_js
-    assert "Backend translation test passed." in app_js
-    assert "OpenAI API ready (live translation" in app_js
-    assert "config.realtime_transcription_model" not in app_js
-    assert "config.translation_model" in app_js
-    assert "config.realtime_translation_model" not in app_js
+    assert "Realtime transcription and translation test passed." in app_js
+    assert "OpenAI API ready" in app_js
+    assert "config.translation_model" not in app_js
+    assert "config.realtime_translation_model" in app_js
     assert "Using built-in browser defaults." in app_js
-    assert "/api/translate" in app_js
+    assert "/api/translate" not in app_js
     assert "chat/completions" not in app_js
+
+
+def test_live_capture_wires_both_transcription_and_translation_sessions():
+    app_js = (STATIC_DIR / "app.js").read_text()
+
+    assert "startRealtimeTranscription(audioTracks)" in app_js
+    assert "startRealtimeTranslation(audioTracks)" in app_js
+    assert 'fetch("/api/realtime/token")' in app_js
+    assert 'fetch("/api/realtime/translation-token")' in app_js
+    assert 'fetch(`${config.openai_base_url}/realtime/calls`' in app_js
+    assert 'fetch(`${config.openai_base_url}/realtime/translations/calls`' in app_js
+    assert "conversation.item.input_audio_transcription.delta" in app_js
+    assert "conversation.item.input_audio_transcription.completed" in app_js
+    assert "input_audio_buffer.commit" in app_js
+    assert "session.output_transcript.delta" in app_js
+    assert "appendTranslatedText(event.delta || \"\")" in app_js
+    assert "session.input_transcript.delta" in app_js
+    assert "sourceFromTranscription" in app_js
+    assert "audioTracks[0].clone()" in app_js
+    assert 'direction: "sendonly"' in app_js
+    assert "forceSendOnlyAudioSdp" in app_js
+    assert 'replaceAll("a=sendrecv", "a=sendonly")' in app_js
+    assert 'replaceAll("a=recvonly", "a=inactive")' in app_js
+    assert "translatedAudio" not in app_js
 
 
 def test_browser_app_supports_transcript_export():
@@ -74,28 +98,25 @@ def test_browser_app_reports_runtime_metrics():
     assert "setRuntimeState" in app_js
 
 
-def test_browser_app_marks_revisable_live_translation():
+def test_browser_app_streams_translated_text():
     app_js = (STATIC_DIR / "app.js").read_text()
     index_html = (STATIC_DIR / "index.html").read_text()
     styles_css = (STATIC_DIR / "styles.css").read_text()
 
     assert 'id="live-translation"' in index_html
-    assert "config.live_translation_debounce_ms" in app_js
-    assert "config.live_translation_force_words" in app_js
-    assert "context_source_text" in app_js
-    assert "mode: options.mode" in app_js
-    assert "appendDraftTranslation" in app_js
+    assert "appendTranslatedText" in app_js
+    assert "translatedAudio" not in app_js
     assert ".live-translation" in styles_css
     assert "Live draft" in styles_css
 
 
-def test_browser_app_commits_realtime_audio_for_automatic_translation():
+def test_browser_app_commits_transcription_audio_buffers():
     app_js = (STATIC_DIR / "app.js").read_text()
 
     assert "TRANSCRIPTION_COMMIT_IDLE_MS" in app_js
     assert "scheduleTranscriptionCommit" in app_js
     assert "input_audio_buffer.commit" in app_js
-    assert "waitForPendingTranscription" in app_js
+    assert "waitForPendingTranscription" not in app_js
 
 
 def test_browser_app_checks_capture_prerequisites():
@@ -121,3 +142,12 @@ def test_pwa_manifest_declares_install_icons():
     assert "/icon-maskable.svg" in service_worker
     assert (STATIC_DIR / "icon.svg").exists()
     assert (STATIC_DIR / "icon-maskable.svg").exists()
+
+
+def test_service_worker_replaces_stale_cached_app_shell():
+    service_worker = (STATIC_DIR / "service-worker.js").read_text()
+
+    assert "firetong-mvp-v14" in service_worker
+    assert "self.skipWaiting()" in service_worker
+    assert "self.clients.claim()" in service_worker
+    assert "caches.delete(cacheName)" in service_worker
