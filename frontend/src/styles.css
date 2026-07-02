@@ -16,6 +16,7 @@ body {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
@@ -30,7 +31,8 @@ button {
   padding: 0 14px;
 }
 
-input {
+input,
+select {
   min-height: 40px;
   border: 1px solid #c8d1dc;
   border-radius: 6px;
@@ -40,11 +42,13 @@ input {
   outline: none;
 }
 
-input:disabled {
+input:disabled,
+select:disabled {
   opacity: 0.6;
 }
 
-input:focus {
+input:focus,
+select:focus {
   border-color: #1f6feb;
   box-shadow: 0 0 0 3px rgb(31 111 235 / 14%);
 }
@@ -119,14 +123,27 @@ h2 {
   padding-block: 14px;
 }
 
-.api-key-field {
+.api-key-field,
+.control-field {
   display: grid;
   gap: 4px;
+}
+
+.api-key-field {
   flex: 1 1 260px;
   max-width: 380px;
 }
 
+.control-field {
+  flex: 0 1 220px;
+}
+
+.input-field {
+  flex-basis: 280px;
+}
+
 .api-key-field span,
+.control-field span,
 .api-key-message {
   color: #5f6b7a;
   font-size: 13px;

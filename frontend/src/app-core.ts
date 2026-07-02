@@ -20,8 +20,10 @@ export function missingBrowserFeatures(
   browserNavigator: Navigator,
 ): string[] {
   const missing: string[] = [];
+  const hasScreenAudioCapture = Boolean(browserNavigator.mediaDevices?.getDisplayMedia);
+  const hasMicrophoneAudioCapture = Boolean(browserNavigator.mediaDevices?.getUserMedia);
 
-  if (!browserNavigator.mediaDevices?.getDisplayMedia) missing.push("screen audio capture");
+  if (!hasScreenAudioCapture && !hasMicrophoneAudioCapture) missing.push("audio capture");
   if (!browserWindow.RTCPeerConnection) missing.push("realtime audio streaming");
   if (!browserWindow.AudioContext) missing.push("audio analysis");
 

@@ -14,9 +14,10 @@ def test_browser_core_defaults_are_defined_for_runtime_config():
 def test_browser_core_feature_check_reports_capture_prerequisites():
     app_core = APP_CORE_TS.read_text()
 
-    assert 'missing.push("screen audio capture")' in app_core
+    assert 'missing.push("audio capture")' in app_core
     assert 'missing.push("realtime audio streaming")' in app_core
     assert 'missing.push("audio analysis")' in app_core
     assert "getDisplayMedia" in app_core
+    assert "getUserMedia" in app_core
     assert "RTCPeerConnection" in app_core
     assert "AudioContext" in app_core

@@ -20,6 +20,13 @@ type CaptureCallbacks = {
 
 const TRANSCRIPTION_COMMIT_IDLE_MS = 900;
 
+export type AudioCaptureMode = "desktop" | "microphone";
+
+export type AudioCaptureOptions = {
+  mode: AudioCaptureMode;
+  microphoneDeviceId?: string;
+};
+
 export class RealtimeCapture {
   private stream: MediaStream | null = null;
   private peerConnection: RTCPeerConnection | null = null;
@@ -42,16 +49,13 @@ export class RealtimeCapture {
     private readonly openaiApiKeyOverride = "",
   ) {}
 
-  async start(): Promise<void> {
-    this.stream = await navigator.mediaDevices.getDisplayMedia({
-      video: true,
-      audio: true,
-    });
+  async start(options: AudioCaptureOptions = { mode: "desktop" }): Promise<void> {
+    this.stream = await this.captureAudio(options);
 
     const audioTracks = this.stream.getAudioTracks();
     if (audioTracks.length === 0) {
       this.stopSharedMedia();
-      throw new Error("No audio track was shared. Choose a tab/window and enable audio sharing.");
+      throw new Error(this.noAudioTrackMessage(options.mode));
     }
 
     this.callbacks.onResetTranscripts();
@@ -81,6 +85,36 @@ export class RealtimeCapture {
     audioStream: MediaStream,
   ): RTCRtpSender {
     return peerConnectionToUpdate.addTrack(audioTrack, audioStream);
+  }
+
+  private async captureAudio(options: AudioCaptureOptions): Promise<MediaStream> {
+    if (options.mode === "microphone") {
+      return navigator.mediaDevices.getUserMedia({
+        audio: this.microphoneAudioConstraints(options.microphoneDeviceId),
+        video: false,
+      });
+    }
+
+    return navigator.mediaDevices.getDisplayMedia({
+      video: true,
+      audio: true,
+    });
+  }
+
+  private microphoneAudioConstraints(deviceId?: string): MediaTrackConstraints | true {
+    if (!deviceId || deviceId === "default") return true;
+
+    return {
+      deviceId: { exact: deviceId },
+    };
+  }
+
+  private noAudioTrackMessage(mode: AudioCaptureMode): string {
+    if (mode === "microphone") {
+      return "No microphone audio track was captured. Choose another audio input or allow microphone access.";
+    }
+
+    return "No audio track was shared. Choose a tab/window and enable audio sharing.";
   }
 
   private async fetchRealtimeTranslationToken(): Promise<string> {

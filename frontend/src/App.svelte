@@ -1,7 +1,10 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
+  import { listAudioInputOptions, type AudioInputOption } from "./audio-devices";
   import { DEFAULT_CONFIG, missingBrowserFeatures, type AppConfig } from "./app-core";
-  import { RealtimeCapture } from "./realtime";
+  import LiveTranslationControls from "./LiveTranslationControls.svelte";
+  import { RealtimeCapture, type AudioCaptureMode } from "./realtime";
+  import TranscriptPanels from "./TranscriptPanels.svelte";
 
   const OPENAI_API_KEY_OVERRIDE_STORAGE_KEY = "firetong.openaiApiKeyOverride";
 
@@ -15,6 +18,11 @@
   let testRunning = false;
   let openaiApiKeyOverride = "";
   let apiKeyMessage = "";
+  let audioCaptureMode: AudioCaptureMode = "desktop";
+  let selectedAudioInputId = "default";
+  let audioInputOptions: AudioInputOption[] = [];
+  let desktopCaptureSupported = true;
+  let microphoneCaptureSupported = true;
 
   let meterLevel = 0;
 
@@ -30,6 +38,7 @@
     }
 
     void readConfig();
+    void refreshAudioInputOptions();
 
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/service-worker.js").catch(() => {
@@ -43,6 +52,7 @@
   }
 
   function checkBrowserSupport(): boolean {
+    updateCaptureSupport();
     const missing = missingBrowserFeatures(window, navigator);
     if (missing.length === 0) {
       browserSupported = true;
@@ -52,6 +62,37 @@
     browserSupported = false;
     setLog(`This browser is missing: ${missing.join(", ")}.`);
     return false;
+  }
+
+  function updateCaptureSupport(): void {
+    desktopCaptureSupported = Boolean(navigator.mediaDevices?.getDisplayMedia);
+    microphoneCaptureSupported = Boolean(navigator.mediaDevices?.getUserMedia);
+
+    if (audioCaptureMode === "desktop" && !desktopCaptureSupported && microphoneCaptureSupported) {
+      audioCaptureMode = "microphone";
+    }
+    if (audioCaptureMode === "microphone" && !microphoneCaptureSupported && desktopCaptureSupported) {
+      audioCaptureMode = "desktop";
+    }
+  }
+
+  function selectedCaptureSourceSupported(): boolean {
+    return audioCaptureMode === "desktop" ? desktopCaptureSupported : microphoneCaptureSupported;
+  }
+
+  async function refreshAudioInputOptions(): Promise<void> {
+    try {
+      audioInputOptions = await listAudioInputOptions();
+
+      const selectedDeviceStillExists = audioInputOptions.some(
+        (device) => device.deviceId === selectedAudioInputId,
+      );
+      if (selectedAudioInputId !== "default" && !selectedDeviceStillExists) {
+        selectedAudioInputId = "default";
+      }
+    } catch {
+      audioInputOptions = [];
+    }
   }
 
   async function readConfig(): Promise<void> {
@@ -141,13 +182,23 @@
 
   async function startCapture(): Promise<void> {
     if (!checkBrowserSupport()) return;
+    if (!selectedCaptureSourceSupported()) {
+      const sourceLabel = audioCaptureMode === "desktop" ? "Desktop/tab" : "Microphone";
+      setLog(`${sourceLabel} audio capture is unavailable.`);
+      return;
+    }
 
     capture = buildCapture();
     try {
-      await capture.start();
+      await capture.start({
+        mode: audioCaptureMode,
+        microphoneDeviceId: selectedAudioInputId,
+      });
+      void refreshAudioInputOptions();
     } catch (error) {
       captureActive = false;
       setLog(error instanceof Error ? error.message : String(error));
+      void refreshAudioInputOptions();
     }
   }
 
@@ -197,67 +248,33 @@
     <div class="status">{apiStatus}</div>
   </header>
 
-  <section class="controls" aria-label="Live translation controls">
-    <label class="api-key-field">
-      <span>OpenAI API key override</span>
-      <input
-        type="password"
-        bind:value={openaiApiKeyOverride}
-        placeholder="Use server key"
-        autocomplete="off"
-        disabled={captureActive}
-      />
-    </label>
-    <button type="button" onclick={saveOpenAiApiKeyOverride} disabled={captureActive}>Save key</button>
-    <button
-      type="button"
-      class="secondary"
-      onclick={clearOpenAiApiKeyOverride}
-      disabled={captureActive || !openaiApiKeyOverride}
-    >
-      Clear key
-    </button>
-    <button type="button" onclick={testServerConnection} disabled={testRunning}>
-      {testRunning ? "Testing..." : "Test OpenAI"}
-    </button>
-    <button type="button" onclick={startCapture} disabled={captureActive || !browserSupported}>
-      Start live translation
-    </button>
-    <button type="button" onclick={stopCapture} disabled={!captureActive}>Stop</button>
-    <button type="button" onclick={clearTranscripts}>Clear</button>
-    <div class="meter" aria-label="Audio level">
-      <span style={`width: ${meterLevel}%`}></span>
-    </div>
-    {#if apiKeyMessage}
-      <span class="api-key-message">{apiKeyMessage}</span>
-    {/if}
-  </section>
+  <LiveTranslationControls
+    bind:audioCaptureMode
+    bind:openaiApiKeyOverride
+    bind:selectedAudioInputId
+    {apiKeyMessage}
+    {audioInputOptions}
+    {browserSupported}
+    {captureActive}
+    {clearOpenAiApiKeyOverride}
+    {clearTranscripts}
+    {desktopCaptureSupported}
+    {meterLevel}
+    {microphoneCaptureSupported}
+    {refreshAudioInputOptions}
+    {saveOpenAiApiKeyOverride}
+    {startCapture}
+    {stopCapture}
+    {testRunning}
+    {testServerConnection}
+  />
 
-  <section class="panels" aria-label="Transcript and translation">
-    <article class="panel">
-      <div class="panel-title">
-        <h2>Indonesian source</h2>
-      </div>
-      <textarea
-        bind:this={sourceTextarea}
-        readonly
-        bind:value={sourceTranscript}
-        placeholder="Live Indonesian source appears here."
-      ></textarea>
-    </article>
-
-    <article class="panel">
-      <div class="panel-title">
-        <h2>English</h2>
-      </div>
-      <textarea
-        bind:this={translatedTextarea}
-        readonly
-        bind:value={translatedTranscript}
-        placeholder="English translation appears here."
-      ></textarea>
-    </article>
-  </section>
+  <TranscriptPanels
+    bind:sourceTextarea
+    bind:sourceTranscript
+    bind:translatedTextarea
+    bind:translatedTranscript
+  />
 
   <p class="log">{logMessage}</p>
 </main>
