@@ -7,7 +7,12 @@ SRC_DIR = Path("frontend/src")
 
 def read_frontend_source() -> tuple[str, str, str, str]:
     app_svelte = (SRC_DIR / "App.svelte").read_text()
-    realtime_ts = (SRC_DIR / "realtime.ts").read_text()
+    realtime_ts = "\n".join(
+        [
+            (SRC_DIR / "realtime.ts").read_text(),
+            (SRC_DIR / "realtime-events.ts").read_text(),
+        ]
+    )
     app_core_ts = (SRC_DIR / "app-core.ts").read_text()
     styles_css = (SRC_DIR / "styles.css").read_text()
     return app_svelte, realtime_ts, app_core_ts, styles_css

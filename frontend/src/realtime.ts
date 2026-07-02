@@ -1,14 +1,11 @@
 import type { AppConfig } from "./app-core";
-
-type RealtimeEvent = {
-  type: string;
-  item_id?: string;
-  delta?: string;
-  transcript?: string;
-  error?: {
-    message?: string;
-  };
-};
+import {
+  applyRealtimeTranscriptionEvent,
+  applyRealtimeTranslationEvent,
+  createRealtimeEventState,
+  type RealtimeEvent,
+  type RealtimeEventState,
+} from "./realtime-events";
 
 type CaptureCallbacks = {
   onCapturingChange(isCapturing: boolean): void;
@@ -37,8 +34,7 @@ export class RealtimeCapture {
   private transcriptionChannelOpen = false;
   private transcriptionPeerConnected = false;
   private lastTranscriptionCommitBytesSent = 0;
-  private transcriptionItems = new Map<string, string>();
-  private sourceFromTranscription = false;
+  private eventState: RealtimeEventState = createRealtimeEventState();
 
   constructor(
     private readonly config: AppConfig,
@@ -168,49 +164,11 @@ export class RealtimeCapture {
   };
 
   private handleRealtimeTranscriptionEvent(event: RealtimeEvent): void {
-    if (event.type === "conversation.item.input_audio_transcription.delta") {
-      this.sourceFromTranscription = true;
-      const itemId = event.item_id || "current";
-      const currentText = this.transcriptionItems.get(itemId) || "";
-      this.transcriptionItems.set(itemId, `${currentText}${event.delta || ""}`);
-      this.callbacks.onSourceDelta(event.delta || "");
-    }
-
-    if (event.type === "conversation.item.input_audio_transcription.completed") {
-      this.sourceFromTranscription = true;
-      const itemId = event.item_id || "current";
-      const currentText = (this.transcriptionItems.get(itemId) || "").trim();
-      const transcript = (event.transcript || "").trim();
-      if (!currentText && transcript) {
-        this.callbacks.onSourceDelta(transcript);
-      }
-      this.transcriptionItems.delete(itemId);
-      this.callbacks.onSourceComplete();
-    }
-
-    if (event.type === "error") {
-      this.callbacks.onState("Error");
-      this.callbacks.onLog(event.error?.message || "Realtime transcription failed.");
-    }
+    applyRealtimeTranscriptionEvent(event, this.eventState, this.callbacks);
   }
 
   private handleRealtimeTranslationEvent(event: RealtimeEvent): void {
-    if (event.type === "session.input_transcript.delta" && !this.sourceFromTranscription) {
-      this.callbacks.onSourceDelta(event.delta || "");
-    }
-
-    if (event.type === "session.output_transcript.delta") {
-      this.callbacks.onTranslationDelta(event.delta || "");
-    }
-
-    if (event.type === "session.closed") {
-      this.callbacks.onState("Stopped");
-    }
-
-    if (event.type === "error") {
-      this.callbacks.onState("Error");
-      this.callbacks.onLog(event.error?.message || "Realtime translation failed.");
-    }
+    applyRealtimeTranslationEvent(event, this.eventState, this.callbacks);
   }
 
   private async startRealtimeTranscription(audioTracks: MediaStreamTrack[]): Promise<void> {
@@ -382,8 +340,7 @@ export class RealtimeCapture {
     this.lastTranscriptionCommitBytesSent = 0;
     this.peerConnection = null;
     this.transcriptionPeerConnection = null;
-    this.transcriptionItems = new Map();
-    this.sourceFromTranscription = false;
+    this.eventState = createRealtimeEventState();
   }
 
   private stopSharedMedia(): void {
