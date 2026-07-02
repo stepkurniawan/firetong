@@ -1,7 +1,6 @@
-from fastapi.testclient import TestClient
-
 from backend.firetong.main import app
 from backend.firetong.settings import Settings, get_settings
+from fastapi.testclient import TestClient
 
 
 def override_settings(**values):

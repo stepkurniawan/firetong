@@ -11,7 +11,6 @@ from backend.firetong.schemas import (
 )
 from backend.firetong.settings import Settings, get_settings
 
-
 app = FastAPI(title="FireTong MVP")
 
 
@@ -77,7 +76,9 @@ async def create_realtime_translation_token(
 
     client_secret = response.get("value")
     if not client_secret:
-        raise HTTPException(502, detail="OpenAI did not return a realtime translation client secret.")
+        raise HTTPException(
+            502, detail="OpenAI did not return a realtime translation client secret."
+        )
 
     return RealtimeTokenResponse(value=client_secret)
 

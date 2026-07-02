@@ -3,6 +3,8 @@
   import { DEFAULT_CONFIG, missingBrowserFeatures, type AppConfig } from "./app-core";
   import { RealtimeCapture } from "./realtime";
 
+  const OPENAI_API_KEY_OVERRIDE_STORAGE_KEY = "firetong.openaiApiKeyOverride";
+
   let config: AppConfig = { ...DEFAULT_CONFIG };
   let capture: RealtimeCapture | null = null;
 
@@ -11,6 +13,8 @@
   let browserSupported = true;
   let captureActive = false;
   let testRunning = false;
+  let openaiApiKeyOverride = "";
+  let apiKeyMessage = "";
 
   let meterLevel = 0;
 
@@ -20,6 +24,11 @@
   let translatedTextarea: HTMLTextAreaElement | null = null;
 
   onMount(() => {
+    openaiApiKeyOverride = localStorage.getItem(OPENAI_API_KEY_OVERRIDE_STORAGE_KEY) || "";
+    if (openaiApiKeyOverride) {
+      apiKeyMessage = "Using browser OpenAI key override.";
+    }
+
     void readConfig();
 
     if ("serviceWorker" in navigator) {
@@ -71,6 +80,30 @@
     void scrollTranscriptAreas();
   }
 
+  function openaiApiKeyHeaders(): HeadersInit {
+    const apiKey = openaiApiKeyOverride.trim();
+    return apiKey ? { "X-OpenAI-API-Key": apiKey } : {};
+  }
+
+  function saveOpenAiApiKeyOverride(): void {
+    const apiKey = openaiApiKeyOverride.trim();
+    openaiApiKeyOverride = apiKey;
+
+    if (apiKey) {
+      localStorage.setItem(OPENAI_API_KEY_OVERRIDE_STORAGE_KEY, apiKey);
+      apiKeyMessage = "Using browser OpenAI key override.";
+    } else {
+      localStorage.removeItem(OPENAI_API_KEY_OVERRIDE_STORAGE_KEY);
+      apiKeyMessage = "Using server OpenAI key.";
+    }
+  }
+
+  function clearOpenAiApiKeyOverride(): void {
+    openaiApiKeyOverride = "";
+    localStorage.removeItem(OPENAI_API_KEY_OVERRIDE_STORAGE_KEY);
+    apiKeyMessage = "Using server OpenAI key.";
+  }
+
   function markSourceProgress(delta: string): void {
     if (!delta) return;
 
@@ -86,20 +119,24 @@
   }
 
   function buildCapture(): RealtimeCapture {
-    return new RealtimeCapture(config, {
-      onCapturingChange: (isCapturing) => {
-        captureActive = isCapturing;
+    return new RealtimeCapture(
+      config,
+      {
+        onCapturingChange: (isCapturing) => {
+          captureActive = isCapturing;
+        },
+        onLog: setLog,
+        onMeter: (levelPercent) => {
+          meterLevel = levelPercent;
+        },
+        onResetTranscripts: resetRealtimeState,
+        onSourceComplete: () => {},
+        onSourceDelta: markSourceProgress,
+        onState: () => {},
+        onTranslationDelta: appendTranslatedText,
       },
-      onLog: setLog,
-      onMeter: (levelPercent) => {
-        meterLevel = levelPercent;
-      },
-      onResetTranscripts: resetRealtimeState,
-      onSourceComplete: () => {},
-      onSourceDelta: markSourceProgress,
-      onState: () => {},
-      onTranslationDelta: appendTranslatedText,
-    });
+      openaiApiKeyOverride,
+    );
   }
 
   async function startCapture(): Promise<void> {
@@ -123,8 +160,8 @@
     testRunning = true;
     try {
       const [transcriptionResponse, translationResponse] = await Promise.all([
-        fetch("/api/realtime/token"),
-        fetch("/api/realtime/translation-token"),
+        fetch("/api/realtime/token", { headers: openaiApiKeyHeaders() }),
+        fetch("/api/realtime/translation-token", { headers: openaiApiKeyHeaders() }),
       ]);
 
       if (transcriptionResponse.ok && translationResponse.ok) {
@@ -161,6 +198,25 @@
   </header>
 
   <section class="controls" aria-label="Live translation controls">
+    <label class="api-key-field">
+      <span>OpenAI API key override</span>
+      <input
+        type="password"
+        bind:value={openaiApiKeyOverride}
+        placeholder="Use server key"
+        autocomplete="off"
+        disabled={captureActive}
+      />
+    </label>
+    <button type="button" onclick={saveOpenAiApiKeyOverride} disabled={captureActive}>Save key</button>
+    <button
+      type="button"
+      class="secondary"
+      onclick={clearOpenAiApiKeyOverride}
+      disabled={captureActive || !openaiApiKeyOverride}
+    >
+      Clear key
+    </button>
     <button type="button" onclick={testServerConnection} disabled={testRunning}>
       {testRunning ? "Testing..." : "Test OpenAI"}
     </button>
@@ -172,6 +228,9 @@
     <div class="meter" aria-label="Audio level">
       <span style={`width: ${meterLevel}%`}></span>
     </div>
+    {#if apiKeyMessage}
+      <span class="api-key-message">{apiKeyMessage}</span>
+    {/if}
   </section>
 
   <section class="panels" aria-label="Transcript and translation">

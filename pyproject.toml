@@ -14,9 +14,19 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "pre-commit>=4.0.0",
     "pytest>=8.2.0",
+    "ruff>=0.8.0",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]
 pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+src = ["backend"]
+target-version = "py314"
+
+[tool.ruff.lint]
+extend-select = ["I"]

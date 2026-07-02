@@ -1,6 +1,5 @@
-from pathlib import Path
 import json
-
+from pathlib import Path
 
 STATIC_DIR = Path("backend/static")
 SRC_DIR = Path("frontend/src")
@@ -56,6 +55,9 @@ def test_browser_app_uses_realtime_translation_only():
     assert "translateCurrentText" not in app_svelte
     assert "Realtime transcription and translation test passed." in app_svelte
     assert "OpenAI API ready" in app_svelte
+    assert "OpenAI API key override" in app_svelte
+    assert "firetong.openaiApiKeyOverride" in app_svelte
+    assert "X-OpenAI-API-Key" in app_svelte + realtime_ts
     assert "config.translation_model" not in app_svelte
     assert "config.realtime_translation_model" in app_svelte
     assert "Using built-in browser defaults." in app_svelte
@@ -68,10 +70,11 @@ def test_live_capture_wires_both_transcription_and_translation_sessions():
 
     assert "this.startRealtimeTranscription(audioTracks)" in realtime_ts
     assert "this.startRealtimeTranslation(audioTracks)" in realtime_ts
-    assert 'fetch("/api/realtime/token")' in realtime_ts
-    assert 'fetch("/api/realtime/translation-token")' in realtime_ts
-    assert 'fetch(`${this.config.openai_base_url}/realtime/calls`' in realtime_ts
-    assert 'fetch(`${this.config.openai_base_url}/realtime/translations/calls`' in realtime_ts
+    assert 'fetch("/api/realtime/token"' in realtime_ts
+    assert 'fetch("/api/realtime/translation-token"' in realtime_ts
+    assert "openaiApiKeyHeaders()" in realtime_ts
+    assert "fetch(`${this.config.openai_base_url}/realtime/calls`" in realtime_ts
+    assert "fetch(`${this.config.openai_base_url}/realtime/translations/calls`" in realtime_ts
     assert "conversation.item.input_audio_transcription.delta" in realtime_ts
     assert "conversation.item.input_audio_transcription.completed" in realtime_ts
     assert "input_audio_buffer.commit" in realtime_ts

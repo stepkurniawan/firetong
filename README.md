@@ -55,6 +55,20 @@ The Python server serves the static app and mints realtime transcription/transla
 
 FireTong checks for the browser APIs it needs on load: shared audio capture, `RTCPeerConnection`, and `AudioContext`.
 
+## Docker Hub publishing
+
+The GitHub Actions workflow in `.github/workflows/docker-image.yml` builds the
+Dockerfile on pull requests and publishes the image to Docker Hub on pushes to
+`main`, version tags like `v0.1.0`, and manual workflow runs.
+
+Configure these repository secrets in GitHub:
+
+- `DOCKERHUB_USERNAME`: Docker Hub namespace for the image.
+- `DOCKERHUB_TOKEN`: Docker Hub access token or password with push access.
+
+Images are pushed as `DOCKERHUB_USERNAME/firetong` with branch, tag, SHA, and
+`latest` tags where applicable.
+
 ## Settings
 
 Environment variables use the `FIRETONG_` prefix:
@@ -71,8 +85,22 @@ Environment variables use the `FIRETONG_` prefix:
 ```bash
 npm run check
 npm run build
+uv run ruff check
+uv run ruff format --check
 uv run pytest
 ```
+
+## Pre-commit
+
+```bash
+uv sync
+npm install
+uv run pre-commit install
+uv run pre-commit run --all-files
+```
+
+The hook runs Ruff linting/formatting for Python and `npm run check` for the
+Svelte frontend.
 
 ## Manual browser verification
 

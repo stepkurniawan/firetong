@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 APP_CORE_TS = Path("frontend/src/app-core.ts")
 
 
