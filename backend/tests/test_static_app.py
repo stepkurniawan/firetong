@@ -60,7 +60,7 @@ def test_browser_app_uses_realtime_translation_only():
     assert 'id="save-key-button"' not in index_html
     assert 'id="translate-button"' not in index_html
     assert "readonly" in app_svelte
-    assert "Test OpenAI" in app_svelte
+    assert "Check connection" in app_svelte
     assert "load-model-button" not in app_svelte
     assert "testServerConnection" in app_svelte
     assert "translateCurrentText" not in app_svelte

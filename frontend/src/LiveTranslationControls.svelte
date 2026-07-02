@@ -29,10 +29,8 @@
   }
 
   $: captureButtonLabel = captureActive
-    ? "⏹️ Stop"
-    : audioCaptureMode === "desktop"
-      ? "Request Audio Permisson"
-      : "▶️ Start";
+    ? "Stop translation"
+    : "Start live translation";
 </script>
 
 <section class="controls" aria-label="Live translation controls">

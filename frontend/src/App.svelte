@@ -26,6 +26,10 @@
   let sourceTextarea: HTMLTextAreaElement | null = null;
   let translatedTextarea: HTMLTextAreaElement | null = null;
 
+  const supportUrl = "https://paypal.me/stepkurniawan";
+  const feedbackEmail = "stepkurniawan.learn@gmail.com";
+  const linkedInUrl = "https://www.linkedin.com/in/stepkurniawan/";
+
   onMount(() => {
     void readConfig();
     void refreshAudioInputOptions();
@@ -202,17 +206,61 @@
   <header class="topbar">
     <div>
       <h1>FireTong</h1>
-      <p>Indonesian sermon audio to English translation</p>
+      <p>Pronounced "Fire Tongue"</p>
     </div>
+    <a class="support-action" href={supportUrl} target="_blank" rel="noreferrer">
+      Fuel FireTong
+    </a>
     <button
       type="button"
       class="secondary topbar-action"
       onclick={testServerConnection}
       disabled={testRunning}
     >
-      {testRunning ? "Testing..." : "Test OpenAI"}
+      {testRunning ? "Checking..." : "Check connection"}
     </button>
   </header>
+
+  <section class="intro" aria-labelledby="intro-title">
+    <div class="intro-copy">
+      <p class="eyebrow">Live sermon translation</p>
+      <h2 id="intro-title">Follow Indonesian sermons in English, as they happen.</h2>
+      <p>
+        FireTong helps English-speaking listeners, guests, missionaries, bilingual
+        families, and church communities follow Indonesian preaching in real time.
+        Choose a browser tab, desktop audio, or microphone, then read the Indonesian
+        source and English translation side by side.
+      </p>
+      <p class="author-line">
+        Created by Stephen Kurniawan.
+      </p>
+    </div>
+    <div class="intro-actions" aria-label="Project actions">
+      <a class="button-link" href={`mailto:${feedbackEmail}`}>Send feedback</a>
+    </div>
+  </section>
+
+  <section class="guide" aria-label="How FireTong works">
+    <div>
+      <span>1</span>
+      <p>Choose desktop, tab, or microphone audio.</p>
+    </div>
+    <div>
+      <span>2</span>
+      <p>Start live translation during the sermon.</p>
+    </div>
+    <div>
+      <span>3</span>
+      <p>Read Indonesian and English text together.</p>
+    </div>
+  </section>
+
+  <section class="notice" aria-label="Privacy and training notice">
+    <strong>Before you start:</strong>
+    Audio is streamed to OpenAI Realtime for transcription and translation.
+    Transcripts may be stored and used to improve FireTong, so only use sermon
+    audio or other content you have permission to process.
+  </section>
 
   <LiveTranslationControls
     bind:audioCaptureMode
@@ -236,4 +284,16 @@
   />
 
   <p class="log">{logMessage}</p>
+
+  <footer class="footer">
+    <p>
+      Support helps pay for realtime translation credit, like adding fuel for the
+      next sermon.
+    </p>
+    <nav aria-label="Footer links">
+      <a href={supportUrl} target="_blank" rel="noreferrer">Fuel FireTong</a>
+      <a href={`mailto:${feedbackEmail}`}>{feedbackEmail}</a>
+      <a href={linkedInUrl} target="_blank" rel="noreferrer">Stephen Kurniawan on LinkedIn</a>
+    </nav>
+  </footer>
 </main>
