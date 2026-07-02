@@ -1,0 +1,9 @@
+default_permissions = "workspace-no-env"
+
+[permissions.workspace-no-env.filesystem]
+glob_scan_max_depth = 3
+
+[permissions.workspace-no-env.filesystem.":workspace_roots"]
+"." = "write"
+".env" = "deny"
+"**/.env" = "deny"

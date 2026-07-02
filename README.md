@@ -53,6 +53,28 @@ The Docker image builds the Svelte frontend, copies the generated static files i
 the FastAPI app, and runs Uvicorn on port 8000. Runtime settings are passed through
 Compose from your shell or `.env`; secrets are not copied into the image.
 
+## Run on a NAS
+
+Use the NAS override when you want the NAS to run the published Docker Hub image
+and let an existing NAS Watchtower update it automatically:
+
+```bash
+cp .env.example .env
+# edit .env and set FIRETONG_OPENAI_API_KEY
+docker compose -f compose.yaml -f compose.nas.yaml up -d
+```
+
+Run the NAS override together with `compose.yaml`; the override only replaces
+the build with the published image. Do not use `--build` for the NAS image path.
+
+The default NAS image is `stepkurniawan/firetong:latest`, which is published by
+the GitHub Actions workflow for `linux/amd64` and `linux/arm64`.
+
+The NAS override labels `firetong` for Watchtower. If your existing Watchtower
+runs with `--label-enable`, this label is what allows it to update the container.
+Updates happen on that existing Watchtower schedule, for example the next daily
+poll if it checks once per day.
+
 The readable frontend source lives in `frontend/src`. The backend lives in
 `backend/firetong`. The production frontend build is written to `backend/static`,
 which is the directory mounted by FastAPI.

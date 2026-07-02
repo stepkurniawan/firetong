@@ -1,0 +1,7 @@
+services:
+  firetong:
+    build: !reset null
+    image: ${FIRETONG_IMAGE:?set FIRETONG_IMAGE in .env, e.g. stepkurniawan/firetong:latest}
+    pull_policy: always
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
