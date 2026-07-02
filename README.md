@@ -23,6 +23,26 @@ export FIRETONG_OPENAI_API_KEY="sk-..."
 
 Open http://127.0.0.1:8000.
 
+## Run with Docker Compose
+
+```bash
+cp .env.example .env
+# edit .env and set FIRETONG_OPENAI_API_KEY
+docker compose up --build
+```
+
+Open http://127.0.0.1:8000.
+
+If port 8000 is already in use, choose another host port:
+
+```bash
+FIRETONG_PORT=8001 docker compose up --build
+```
+
+The Docker image builds the Svelte frontend, copies the generated static files into
+the FastAPI app, and runs Uvicorn on port 8000. Runtime settings are passed through
+Compose from your shell or `.env`; secrets are not copied into the image.
+
 The readable frontend source lives in `frontend/src`. The backend lives in
 `backend/firetong`. The production frontend build is written to `backend/static`,
 which is the directory mounted by FastAPI.

@@ -43,6 +43,7 @@ export class RealtimeCapture {
   constructor(
     private readonly config: AppConfig,
     private readonly callbacks: CaptureCallbacks,
+    private readonly openaiApiKeyOverride = "",
   ) {}
 
   async start(): Promise<void> {
@@ -87,7 +88,9 @@ export class RealtimeCapture {
   }
 
   private async fetchRealtimeTranslationToken(): Promise<string> {
-    const response = await fetch("/api/realtime/translation-token");
+    const response = await fetch("/api/realtime/translation-token", {
+      headers: this.openaiApiKeyHeaders(),
+    });
     if (!response.ok) throw new Error(await response.text());
 
     const data = (await response.json()) as { value?: string };
@@ -98,7 +101,9 @@ export class RealtimeCapture {
   }
 
   private async fetchRealtimeToken(): Promise<string> {
-    const response = await fetch("/api/realtime/token");
+    const response = await fetch("/api/realtime/token", {
+      headers: this.openaiApiKeyHeaders(),
+    });
     if (!response.ok) throw new Error(await response.text());
 
     const data = (await response.json()) as { value?: string };
@@ -106,6 +111,11 @@ export class RealtimeCapture {
       throw new Error("Realtime token response did not include a client secret.");
     }
     return data.value;
+  }
+
+  private openaiApiKeyHeaders(): HeadersInit {
+    const apiKey = this.openaiApiKeyOverride.trim();
+    return apiKey ? { "X-OpenAI-API-Key": apiKey } : {};
   }
 
   private async hasNewTranscriptionAudio(): Promise<boolean> {

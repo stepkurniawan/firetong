@@ -37,10 +37,18 @@ def test_server_replaces_backend_translation_route():
 def test_realtime_translation_token_route_creates_translation_session(monkeypatch):
     calls = []
 
-    async def fake_post_to_openai(settings, path, json_data=None, form_data=None, files=None):
+    async def fake_post_to_openai(
+        settings,
+        path,
+        api_key_override=None,
+        json_data=None,
+        form_data=None,
+        files=None,
+    ):
         calls.append(
             {
                 "path": path,
+                "api_key_override": api_key_override,
                 "json_data": json_data,
                 "files": files,
                 "model": settings.realtime_translation_model,
@@ -57,6 +65,7 @@ def test_realtime_translation_token_route_creates_translation_session(monkeypatc
     assert response.status_code == 200
     assert response.json() == {"value": "translation-secret"}
     assert calls[0]["path"] == "/realtime/translations/client_secrets"
+    assert calls[0]["api_key_override"] is None
     assert calls[0]["json_data"] == {
         "session": {
             "model": "gpt-realtime-translate",
@@ -75,10 +84,18 @@ def test_realtime_translation_token_route_creates_translation_session(monkeypatc
 def test_realtime_token_route_creates_transcription_session(monkeypatch):
     calls = []
 
-    async def fake_post_to_openai(settings, path, json_data=None, form_data=None, files=None):
+    async def fake_post_to_openai(
+        settings,
+        path,
+        api_key_override=None,
+        json_data=None,
+        form_data=None,
+        files=None,
+    ):
         calls.append(
             {
                 "path": path,
+                "api_key_override": api_key_override,
                 "json_data": json_data,
                 "files": files,
                 "model": settings.transcription_model,
@@ -95,6 +112,7 @@ def test_realtime_token_route_creates_transcription_session(monkeypatch):
     assert response.status_code == 200
     assert response.json() == {"value": "ephemeral-secret"}
     assert calls[0]["path"] == "/realtime/client_secrets"
+    assert calls[0]["api_key_override"] is None
     assert calls[0]["json_data"] == {
         "session": {
             "type": "transcription",
@@ -128,4 +146,42 @@ def test_openai_routes_require_server_api_key():
     assert realtime_translation_response.json() == {
         "detail": "OpenAI API key is not configured on the server."
     }
+    app.dependency_overrides.clear()
+
+
+def test_realtime_token_route_accepts_browser_api_key_override(monkeypatch):
+    calls = []
+
+    async def fake_post_to_openai(
+        settings,
+        path,
+        api_key_override=None,
+        json_data=None,
+        form_data=None,
+        files=None,
+    ):
+        calls.append(
+            {
+                "path": path,
+                "api_key_override": api_key_override,
+                "server_api_key": settings.openai_api_key,
+            }
+        )
+        return {"value": "ephemeral-secret"}
+
+    monkeypatch.setattr("backend.firetong.main.post_to_openai", fake_post_to_openai)
+    app.dependency_overrides[get_settings] = override_settings(openai_api_key=None)
+    client = TestClient(app)
+
+    response = client.get("/api/realtime/token", headers={"X-OpenAI-API-Key": "user-key"})
+
+    assert response.status_code == 200
+    assert response.json() == {"value": "ephemeral-secret"}
+    assert calls == [
+        {
+            "path": "/realtime/client_secrets",
+            "api_key_override": "user-key",
+            "server_api_key": None,
+        }
+    ]
     app.dependency_overrides.clear()

@@ -1,6 +1,7 @@
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.staticfiles import StaticFiles
 from httpx import AsyncClient, HTTPError
 
@@ -26,15 +27,17 @@ def read_config(settings: Settings = Depends(get_settings)) -> AppConfig:
 async def post_to_openai(
     settings: Settings,
     path: str,
+    api_key_override: str | None = None,
     json_data=None,
     form_data=None,
     files=None,
 ):
-    if not settings.openai_api_key:
+    api_key = (api_key_override or settings.openai_api_key or "").strip()
+    if not api_key:
         raise HTTPException(503, detail="OpenAI API key is not configured on the server.")
 
     url = str(settings.openai_base_url).rstrip("/") + path
-    headers = {"Authorization": f"Bearer {settings.openai_api_key}"}
+    headers = {"Authorization": f"Bearer {api_key}"}
 
     try:
         async with AsyncClient(timeout=60) as client:
@@ -54,10 +57,12 @@ async def post_to_openai(
 @app.get("/api/realtime/translation-token", response_model=RealtimeTokenResponse)
 async def create_realtime_translation_token(
     settings: Settings = Depends(get_settings),
+    openai_api_key: Annotated[str | None, Header(alias="X-OpenAI-API-Key")] = None,
 ) -> RealtimeTokenResponse:
     response = await post_to_openai(
         settings,
         "/realtime/translations/client_secrets",
+        api_key_override=openai_api_key,
         json_data={
             "session": {
                 "model": settings.realtime_translation_model,
@@ -80,10 +85,12 @@ async def create_realtime_translation_token(
 @app.get("/api/realtime/token", response_model=RealtimeTokenResponse)
 async def create_realtime_token(
     settings: Settings = Depends(get_settings),
+    openai_api_key: Annotated[str | None, Header(alias="X-OpenAI-API-Key")] = None,
 ) -> RealtimeTokenResponse:
     response = await post_to_openai(
         settings,
         "/realtime/client_secrets",
+        api_key_override=openai_api_key,
         json_data={
             "session": {
                 "type": "transcription",
