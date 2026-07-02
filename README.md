@@ -2,6 +2,16 @@
 
 FireTong (read: "Fire Tongue") MVP: capture shared browser audio, translate Indonesian sermon speech to English live, and display the source and translation in one browser page.
 
+## License
+
+This project is dual-licensed.
+
+Free license: allowed only for church or Christian-related activities that are free to participants.
+
+Paid license: required for any paid, commercial, or monetized use.
+
+See [LICENSE-free-christian.md](LICENSE-free-christian.md) and [LICENSE-commercial.md](LICENSE-commercial.md).
+
 ## What is built
 
 - Svelte + TypeScript browser UI served by a tiny FastAPI local server.
