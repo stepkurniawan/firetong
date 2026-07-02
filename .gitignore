@@ -203,9 +203,15 @@ cython_debug/
 # Temporary file for partial code execution
 tempCodeRunnerFile.py
 
-# Frontend dependencies and local Vite output
+# Frontend dependencies and generated Svelte/Vite files
 node_modules/
 .svelte-kit/
+dist-ssr/
+*.local
+.env.*
+!.env.example
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
 
 # Ruff stuff:
 .ruff_cache/
