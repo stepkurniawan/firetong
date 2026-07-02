@@ -12,7 +12,6 @@
   export let selectedAudioInputId = "default";
   export let testRunning = false;
 
-  export let clearTranscripts: () => void;
   export let refreshAudioInputOptions: () => void | Promise<void>;
   export let startCapture: () => void | Promise<void>;
   export let stopCapture: () => void;
@@ -21,6 +20,15 @@
   $: selectableAudioInputOptions = audioInputOptions.filter(
     (device) => device.deviceId !== "default",
   );
+
+  function toggleCapture(): void {
+    if (captureActive) {
+      stopCapture();
+      return;
+    }
+
+    void startCapture();
+  }
 </script>
 
 <section class="controls" aria-label="Live translation controls">
@@ -53,11 +61,9 @@
       Refresh inputs
     </button>
   {/if}
-  <button type="button" onclick={startCapture} disabled={captureActive || !browserSupported}>
-    Start live translation
+  <button type="button" onclick={toggleCapture} disabled={!captureActive && !browserSupported}>
+    {captureActive ? "⏹️ Stop" : "▶️ Start"}
   </button>
-  <button type="button" onclick={stopCapture} disabled={!captureActive}>Stop</button>
-  <button type="button" onclick={clearTranscripts}>Clear</button>
   <div class="meter" aria-label="Audio level">
     <span style={`width: ${meterLevel}%`}></span>
   </div>

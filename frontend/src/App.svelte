@@ -198,11 +198,6 @@
     }
   }
 
-  function clearTranscripts(): void {
-    sourceTranscript = "";
-    translatedTranscript = "";
-  }
-
 </script>
 
 <main class="app">
@@ -220,7 +215,6 @@
     {audioInputOptions}
     {browserSupported}
     {captureActive}
-    {clearTranscripts}
     {desktopCaptureSupported}
     {meterLevel}
     {microphoneCaptureSupported}
