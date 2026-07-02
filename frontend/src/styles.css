@@ -123,15 +123,9 @@ h2 {
   padding-block: 14px;
 }
 
-.api-key-field,
 .control-field {
   display: grid;
   gap: 4px;
-}
-
-.api-key-field {
-  flex: 1 1 260px;
-  max-width: 380px;
 }
 
 .control-field {
@@ -142,15 +136,9 @@ h2 {
   flex-basis: 280px;
 }
 
-.api-key-field span,
-.control-field span,
-.api-key-message {
+.control-field span {
   color: #5f6b7a;
   font-size: 13px;
-}
-
-.api-key-message {
-  flex: 1 1 220px;
 }
 
 .meter {

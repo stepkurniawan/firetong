@@ -2,7 +2,6 @@
   import type { AudioInputOption } from "./audio-devices";
   import type { AudioCaptureMode } from "./realtime";
 
-  export let apiKeyMessage = "";
   export let audioCaptureMode: AudioCaptureMode = "desktop";
   export let audioInputOptions: AudioInputOption[] = [];
   export let browserSupported = true;
@@ -10,14 +9,11 @@
   export let desktopCaptureSupported = true;
   export let microphoneCaptureSupported = true;
   export let meterLevel = 0;
-  export let openaiApiKeyOverride = "";
   export let selectedAudioInputId = "default";
   export let testRunning = false;
 
-  export let clearOpenAiApiKeyOverride: () => void;
   export let clearTranscripts: () => void;
   export let refreshAudioInputOptions: () => void | Promise<void>;
-  export let saveOpenAiApiKeyOverride: () => void;
   export let startCapture: () => void | Promise<void>;
   export let stopCapture: () => void;
   export let testServerConnection: () => void | Promise<void>;
@@ -28,25 +24,6 @@
 </script>
 
 <section class="controls" aria-label="Live translation controls">
-  <label class="api-key-field">
-    <span>OpenAI API key override</span>
-    <input
-      type="password"
-      bind:value={openaiApiKeyOverride}
-      placeholder="Use server key"
-      autocomplete="off"
-      disabled={captureActive}
-    />
-  </label>
-  <button type="button" onclick={saveOpenAiApiKeyOverride} disabled={captureActive}>Save key</button>
-  <button
-    type="button"
-    class="secondary"
-    onclick={clearOpenAiApiKeyOverride}
-    disabled={captureActive || !openaiApiKeyOverride}
-  >
-    Clear key
-  </button>
   <button type="button" onclick={testServerConnection} disabled={testRunning}>
     {testRunning ? "Testing..." : "Test OpenAI"}
   </button>
@@ -84,7 +61,4 @@
   <div class="meter" aria-label="Audio level">
     <span style={`width: ${meterLevel}%`}></span>
   </div>
-  {#if apiKeyMessage}
-    <span class="api-key-message">{apiKeyMessage}</span>
-  {/if}
 </section>

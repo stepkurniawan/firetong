@@ -6,7 +6,13 @@ SRC_DIR = Path("frontend/src")
 
 
 def read_frontend_source() -> tuple[str, str, str, str]:
-    app_svelte = (SRC_DIR / "App.svelte").read_text()
+    app_svelte = "\n".join(
+        [
+            (SRC_DIR / "App.svelte").read_text(),
+            (SRC_DIR / "LiveTranslationControls.svelte").read_text(),
+            (SRC_DIR / "TranscriptPanels.svelte").read_text(),
+        ]
+    )
     realtime_ts = "\n".join(
         [
             (SRC_DIR / "realtime.ts").read_text(),
@@ -60,9 +66,9 @@ def test_browser_app_uses_realtime_translation_only():
     assert "translateCurrentText" not in app_svelte
     assert "Realtime transcription and translation test passed." in app_svelte
     assert "OpenAI API ready" in app_svelte
-    assert "OpenAI API key override" in app_svelte
-    assert "firetong.openaiApiKeyOverride" in app_svelte
-    assert "X-OpenAI-API-Key" in app_svelte + realtime_ts
+    assert "OpenAI API key override" not in app_svelte
+    assert "firetong.openaiApiKeyOverride" not in app_svelte
+    assert "X-OpenAI-API-Key" not in app_svelte + realtime_ts
     assert "config.translation_model" not in app_svelte
     assert "config.realtime_translation_model" in app_svelte
     assert "Using built-in browser defaults." in app_svelte
@@ -77,7 +83,7 @@ def test_live_capture_wires_both_transcription_and_translation_sessions():
     assert "this.startRealtimeTranslation(audioTracks)" in realtime_ts
     assert 'fetch("/api/realtime/token"' in realtime_ts
     assert 'fetch("/api/realtime/translation-token"' in realtime_ts
-    assert "openaiApiKeyHeaders()" in realtime_ts
+    assert "openaiApiKeyHeaders()" not in realtime_ts
     assert "fetch(`${this.config.openai_base_url}/realtime/calls`" in realtime_ts
     assert "fetch(`${this.config.openai_base_url}/realtime/translations/calls`" in realtime_ts
     assert "conversation.item.input_audio_transcription.delta" in realtime_ts

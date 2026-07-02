@@ -6,8 +6,6 @@
   import { RealtimeCapture, type AudioCaptureMode } from "./realtime";
   import TranscriptPanels from "./TranscriptPanels.svelte";
 
-  const OPENAI_API_KEY_OVERRIDE_STORAGE_KEY = "firetong.openaiApiKeyOverride";
-
   let config: AppConfig = { ...DEFAULT_CONFIG };
   let capture: RealtimeCapture | null = null;
 
@@ -16,8 +14,6 @@
   let browserSupported = true;
   let captureActive = false;
   let testRunning = false;
-  let openaiApiKeyOverride = "";
-  let apiKeyMessage = "";
   let audioCaptureMode: AudioCaptureMode = "desktop";
   let selectedAudioInputId = "default";
   let audioInputOptions: AudioInputOption[] = [];
@@ -32,11 +28,6 @@
   let translatedTextarea: HTMLTextAreaElement | null = null;
 
   onMount(() => {
-    openaiApiKeyOverride = localStorage.getItem(OPENAI_API_KEY_OVERRIDE_STORAGE_KEY) || "";
-    if (openaiApiKeyOverride) {
-      apiKeyMessage = "Using browser OpenAI key override.";
-    }
-
     void readConfig();
     void refreshAudioInputOptions();
 
@@ -121,30 +112,6 @@
     void scrollTranscriptAreas();
   }
 
-  function openaiApiKeyHeaders(): HeadersInit {
-    const apiKey = openaiApiKeyOverride.trim();
-    return apiKey ? { "X-OpenAI-API-Key": apiKey } : {};
-  }
-
-  function saveOpenAiApiKeyOverride(): void {
-    const apiKey = openaiApiKeyOverride.trim();
-    openaiApiKeyOverride = apiKey;
-
-    if (apiKey) {
-      localStorage.setItem(OPENAI_API_KEY_OVERRIDE_STORAGE_KEY, apiKey);
-      apiKeyMessage = "Using browser OpenAI key override.";
-    } else {
-      localStorage.removeItem(OPENAI_API_KEY_OVERRIDE_STORAGE_KEY);
-      apiKeyMessage = "Using server OpenAI key.";
-    }
-  }
-
-  function clearOpenAiApiKeyOverride(): void {
-    openaiApiKeyOverride = "";
-    localStorage.removeItem(OPENAI_API_KEY_OVERRIDE_STORAGE_KEY);
-    apiKeyMessage = "Using server OpenAI key.";
-  }
-
   function markSourceProgress(delta: string): void {
     if (!delta) return;
 
@@ -176,7 +143,6 @@
         onState: () => {},
         onTranslationDelta: appendTranslatedText,
       },
-      openaiApiKeyOverride,
     );
   }
 
@@ -211,8 +177,8 @@
     testRunning = true;
     try {
       const [transcriptionResponse, translationResponse] = await Promise.all([
-        fetch("/api/realtime/token", { headers: openaiApiKeyHeaders() }),
-        fetch("/api/realtime/translation-token", { headers: openaiApiKeyHeaders() }),
+        fetch("/api/realtime/token"),
+        fetch("/api/realtime/translation-token"),
       ]);
 
       if (transcriptionResponse.ok && translationResponse.ok) {
@@ -250,19 +216,15 @@
 
   <LiveTranslationControls
     bind:audioCaptureMode
-    bind:openaiApiKeyOverride
     bind:selectedAudioInputId
-    {apiKeyMessage}
     {audioInputOptions}
     {browserSupported}
     {captureActive}
-    {clearOpenAiApiKeyOverride}
     {clearTranscripts}
     {desktopCaptureSupported}
     {meterLevel}
     {microphoneCaptureSupported}
     {refreshAudioInputOptions}
-    {saveOpenAiApiKeyOverride}
     {startCapture}
     {stopCapture}
     {testRunning}
