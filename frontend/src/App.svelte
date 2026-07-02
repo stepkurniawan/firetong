@@ -9,7 +9,6 @@
   let config: AppConfig = { ...DEFAULT_CONFIG };
   let capture: RealtimeCapture | null = null;
 
-  let apiStatus = "Loading settings...";
   let logMessage = "";
   let browserSupported = true;
   let captureActive = false;
@@ -96,7 +95,6 @@
       setLog("Using built-in browser defaults.");
     }
 
-    apiStatus = `OpenAI API ready (${config.realtime_translation_model})`;
     checkBrowserSupport();
   }
 
@@ -206,7 +204,14 @@
       <h1>FireTong</h1>
       <p>Indonesian sermon audio to English translation</p>
     </div>
-    <div class="status">{apiStatus}</div>
+    <button
+      type="button"
+      class="secondary topbar-action"
+      onclick={testServerConnection}
+      disabled={testRunning}
+    >
+      {testRunning ? "Testing..." : "Test OpenAI"}
+    </button>
   </header>
 
   <LiveTranslationControls
@@ -221,8 +226,6 @@
     {refreshAudioInputOptions}
     {startCapture}
     {stopCapture}
-    {testRunning}
-    {testServerConnection}
   />
 
   <TranscriptPanels

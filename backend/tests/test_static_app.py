@@ -65,12 +65,11 @@ def test_browser_app_uses_realtime_translation_only():
     assert "testServerConnection" in app_svelte
     assert "translateCurrentText" not in app_svelte
     assert "Realtime transcription and translation test passed." in app_svelte
-    assert "OpenAI API ready" in app_svelte
+    assert "OpenAI API ready" not in app_svelte
     assert "OpenAI API key override" not in app_svelte
     assert "firetong.openaiApiKeyOverride" not in app_svelte
     assert "X-OpenAI-API-Key" not in app_svelte + realtime_ts
     assert "config.translation_model" not in app_svelte
-    assert "config.realtime_translation_model" in app_svelte
     assert "Using built-in browser defaults." in app_svelte
     assert "/api/translate" not in app_svelte + realtime_ts
     assert "chat/completions" not in app_svelte + realtime_ts

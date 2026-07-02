@@ -10,12 +10,10 @@
   export let microphoneCaptureSupported = true;
   export let meterLevel = 0;
   export let selectedAudioInputId = "default";
-  export let testRunning = false;
 
   export let refreshAudioInputOptions: () => void | Promise<void>;
   export let startCapture: () => void | Promise<void>;
   export let stopCapture: () => void;
-  export let testServerConnection: () => void | Promise<void>;
 
   $: selectableAudioInputOptions = audioInputOptions.filter(
     (device) => device.deviceId !== "default",
@@ -29,41 +27,55 @@
 
     void startCapture();
   }
+
+  $: captureButtonLabel = captureActive
+    ? "⏹️ Stop"
+    : audioCaptureMode === "desktop"
+      ? "Request Audio Permisson"
+      : "▶️ Start";
 </script>
 
 <section class="controls" aria-label="Live translation controls">
-  <button type="button" onclick={testServerConnection} disabled={testRunning}>
-    {testRunning ? "Testing..." : "Test OpenAI"}
-  </button>
-  <label class="control-field source-field">
-    <span>Audio source</span>
-    <select bind:value={audioCaptureMode} disabled={captureActive}>
-      <option value="desktop" disabled={!desktopCaptureSupported}>Desktop or tab audio</option>
-      <option value="microphone" disabled={!microphoneCaptureSupported}>Microphone input</option>
-    </select>
-  </label>
-  {#if audioCaptureMode === "microphone"}
-    <label class="control-field input-field">
-      <span>Microphone</span>
-      <select bind:value={selectedAudioInputId} disabled={captureActive}>
-        <option value="default">System default microphone</option>
-        {#each selectableAudioInputOptions as device}
-          <option value={device.deviceId}>{device.label}</option>
-        {/each}
+  <div class="control-group">
+    <label class="control-field source-field">
+      <span>Audio source</span>
+      <select bind:value={audioCaptureMode} disabled={captureActive}>
+        <option value="desktop" disabled={!desktopCaptureSupported}>Desktop or tab audio</option>
+        <option value="microphone" disabled={!microphoneCaptureSupported}>Microphone input</option>
       </select>
     </label>
+    {#if audioCaptureMode === "microphone"}
+      <label class="control-field input-field">
+        <span>Microphone</span>
+        <select bind:value={selectedAudioInputId} disabled={captureActive}>
+          <option value="default">System default microphone</option>
+          {#each selectableAudioInputOptions as device}
+            <option value={device.deviceId}>{device.label}</option>
+          {/each}
+        </select>
+      </label>
+    {/if}
+  </div>
+  <div class="action-group" aria-label="Capture actions">
+    {#if audioCaptureMode === "microphone"}
+      <button
+        type="button"
+        class="secondary"
+        onclick={refreshAudioInputOptions}
+        disabled={captureActive}
+      >
+        Refresh inputs
+      </button>
+    {/if}
     <button
       type="button"
-      class="secondary"
-      onclick={refreshAudioInputOptions}
-      disabled={captureActive}
+      class="primary-action"
+      onclick={toggleCapture}
+      disabled={!captureActive && !browserSupported}
     >
-      Refresh inputs
+      {captureButtonLabel}
     </button>
-  {/if}
-  <button type="button" onclick={toggleCapture} disabled={!captureActive && !browserSupported}>
-    {captureActive ? "⏹️ Stop" : "▶️ Start"}
-  </button>
+  </div>
   <div class="meter" aria-label="Audio level">
     <span style={`width: ${meterLevel}%`}></span>
   </div>
