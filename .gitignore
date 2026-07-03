@@ -207,6 +207,8 @@ tempCodeRunnerFile.py
 node_modules/
 .svelte-kit/
 dist-ssr/
+backend/static/*
+!backend/static/.gitkeep
 *.local
 .env.*
 !.env.example

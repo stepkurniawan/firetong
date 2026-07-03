@@ -11,3 +11,11 @@ def test_vite_dev_server_proxies_api_to_local_backend():
     assert "--port 8000" in package_json["scripts"]["dev:api"]
     assert '"/api"' in vite_config
     assert 'target: "http://127.0.0.1:8000"' in vite_config
+
+
+def test_generated_backend_static_assets_are_ignored_but_directory_exists():
+    gitignore = Path(".gitignore").read_text()
+
+    assert "backend/static/*" in gitignore
+    assert "!backend/static/.gitkeep" in gitignore
+    assert Path("backend/static/.gitkeep").exists()
