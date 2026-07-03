@@ -257,7 +257,7 @@
 
   <section class="notice" aria-label="Privacy and training notice">
     <strong>Before you start:</strong>
-    Audio is streamed to OpenAI Realtime for transcription and translation.
+    Audio is streamed to AI provider for transcription and translation.
     Transcripts may be stored and used to improve FireTong, so only use sermon
     audio or other content you have permission to process.
   </section>

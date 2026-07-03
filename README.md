@@ -23,15 +23,26 @@ See [LICENSE-free-christian.md](LICENSE-free-christian.md) and [LICENSE-commerci
 
 ## Run locally
 
+For everyday frontend development, run the FastAPI API and Vite dev server in
+separate terminals:
+
 ```bash
 uv sync
 npm install
-npm run build
 export FIRETONG_OPENAI_API_KEY="sk-..."
-./start.sh
+npm run dev:api
 ```
 
-Open http://127.0.0.1:8000.
+```bash
+npm run dev
+```
+
+Open http://127.0.0.1:5173. Vite serves the Svelte app with hot reload and
+proxies `/api` requests to FastAPI on http://127.0.0.1:8000, so frontend edits do
+not require `npm run build`.
+
+To verify the production static app locally, run `npm run build`, then
+`./start.sh`, and open http://127.0.0.1:8000.
 
 ## Run with Docker Compose
 
@@ -76,8 +87,10 @@ Updates happen on that existing Watchtower schedule, for example the next daily
 poll if it checks once per day.
 
 The readable frontend source lives in `frontend/src`. The backend lives in
-`backend/firetong`. The production frontend build is written to `backend/static`,
-which is the directory mounted by FastAPI.
+`backend/firetong`. In development, Vite serves the frontend and proxies API
+requests to FastAPI. The production frontend build is written to
+`backend/static`, which is the directory mounted by FastAPI in the Docker image
+and production-style local runs.
 
 In Chrome or Edge, click **Test OpenAI**, choose **Desktop or tab audio** or
 **Microphone input**, then click **Start live translation**. For desktop/tab
