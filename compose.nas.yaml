@@ -1,7 +1,16 @@
 services:
   firetong:
-    build: !reset null
-    image: ${FIRETONG_IMAGE:?set FIRETONG_IMAGE in .env, e.g. stepkurniawan/firetong:latest}
+    image: ${FIRETONG_IMAGE:-stepkurniawan/firetong:latest}
     pull_policy: always
+    ports:
+      - "${FIRETONG_PORT:-8000}:8000"
+    environment:
+      FIRETONG_OPENAI_BASE_URL: ${FIRETONG_OPENAI_BASE_URL:-https://api.openai.com/v1}
+      FIRETONG_OPENAI_API_KEY: ${FIRETONG_OPENAI_API_KEY:-}
+      FIRETONG_TRANSCRIPTION_MODEL: ${FIRETONG_TRANSCRIPTION_MODEL:-gpt-realtime-whisper}
+      FIRETONG_REALTIME_TRANSLATION_MODEL: ${FIRETONG_REALTIME_TRANSLATION_MODEL:-gpt-realtime-translate}
+      FIRETONG_REALTIME_TRANSLATION_LANGUAGE: ${FIRETONG_REALTIME_TRANSLATION_LANGUAGE:-en}
+      FIRETONG_REALTIME_TRANSCRIPTION_DELAY: ${FIRETONG_REALTIME_TRANSCRIPTION_DELAY:-low}
     labels:
       com.centurylinklabs.watchtower.enable: "true"
+    restart: unless-stopped
