@@ -417,7 +417,7 @@
       </button>
       <a class="button-link" href={`mailto:${feedbackEmail}`}>Send feedback</a>
       <a class="button-link" href={supportUrl} target="_blank" rel="noreferrer">
-        Fuel FireTong
+        Support FireTong
       </a>
     </div>
   </header>
