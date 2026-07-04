@@ -208,7 +208,8 @@ node_modules/
 .svelte-kit/
 dist-ssr/
 backend/static/*
-!backend/static/.gitkeep
+!backend/static/.gitignore
+saved-sessions/
 *.local
 .env.*
 !.env.example

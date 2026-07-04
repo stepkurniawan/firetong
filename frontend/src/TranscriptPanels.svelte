@@ -1,8 +1,8 @@
 <script lang="ts">
-  export let sourceTextarea: HTMLTextAreaElement | null = null;
+  export let sourceTextarea: HTMLDivElement | null = null;
   export let sourceTranscript = "";
   export let sourceLanguageLabel = "Indonesian";
-  export let translatedTextarea: HTMLTextAreaElement | null = null;
+  export let translatedTextarea: HTMLDivElement | null = null;
   export let translatedTranscript = "";
   export let translatedLanguageLabel = "English";
 </script>
@@ -10,25 +10,51 @@
 <section class="panels" aria-label="Transcript and translation">
   <article class="panel">
     <div class="panel-title">
-      <h2>{sourceLanguageLabel} source</h2>
+      <div>
+        <p class="panel-kicker">Source transcript</p>
+        <h2>{sourceLanguageLabel}</h2>
+      </div>
     </div>
-    <textarea
+    <div
+      class="transcript-surface"
       bind:this={sourceTextarea}
-      readonly
-      bind:value={sourceTranscript}
-      placeholder={`Live ${sourceLanguageLabel.toLowerCase()} source appears here.`}
-    ></textarea>
+      data-readonly="true"
+      role="log"
+      aria-label={`${sourceLanguageLabel} source transcript`}
+      aria-live="polite"
+    >
+      {#if sourceTranscript.trim()}
+        <p>{sourceTranscript}</p>
+      {:else}
+        <p class="transcript-placeholder">
+          Live {sourceLanguageLabel.toLowerCase()} source text will appear here.
+        </p>
+      {/if}
+    </div>
   </article>
 
   <article class="panel">
     <div class="panel-title">
-      <h2>{translatedLanguageLabel}</h2>
+      <div>
+        <p class="panel-kicker">Translation</p>
+        <h2>{translatedLanguageLabel}</h2>
+      </div>
     </div>
-    <textarea
+    <div
+      class="transcript-surface transcript-surface-primary"
       bind:this={translatedTextarea}
-      readonly
-      bind:value={translatedTranscript}
-      placeholder={`${translatedLanguageLabel} translation appears here.`}
-    ></textarea>
+      data-readonly="true"
+      role="log"
+      aria-label={`${translatedLanguageLabel} translation`}
+      aria-live="polite"
+    >
+      {#if translatedTranscript.trim()}
+        <p>{translatedTranscript}</p>
+      {:else}
+        <p class="transcript-placeholder">
+          {translatedLanguageLabel} translation will appear here.
+        </p>
+      {/if}
+    </div>
   </article>
 </section>

@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -8,6 +9,8 @@ from httpx import AsyncClient, HTTPError
 from backend.firetong.schemas import (
     AppConfig,
     RealtimeTokenResponse,
+    TranscriptSessionSaveRequest,
+    TranscriptSessionSaveResponse,
 )
 from backend.firetong.settings import SUPPORTED_REALTIME_LANGUAGES, Settings, get_settings
 
@@ -142,6 +145,53 @@ async def create_realtime_token(
         raise HTTPException(502, detail="OpenAI did not return a realtime client secret.")
 
     return RealtimeTokenResponse(value=client_secret)
+
+
+@app.post("/api/transcript-sessions", response_model=TranscriptSessionSaveResponse)
+def save_transcript_session(
+    payload: TranscriptSessionSaveRequest,
+    settings: Settings = Depends(get_settings),
+) -> TranscriptSessionSaveResponse:
+    source_text = payload.source_text.strip()
+    translated_text = payload.translated_text.strip()
+    if not source_text and not translated_text:
+        raise HTTPException(422, detail="At least one transcript field is required.")
+
+    input_language = resolve_realtime_language(
+        payload.input_language,
+        settings.realtime_input_language,
+        "input_language",
+    )
+    output_language = resolve_realtime_language(
+        payload.output_language,
+        settings.realtime_translation_language,
+        "output_language",
+    )
+
+    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S.%fZ")
+    session_dir = (
+        settings.transcript_save_dir / f"{timestamp}-{input_language}-to-{output_language}"
+    )
+    input_path = session_dir / "input.txt"
+    output_path = session_dir / "output.txt"
+    metadata_path = session_dir / "metadata.json"
+
+    try:
+        session_dir.mkdir(parents=True, exist_ok=False)
+        input_path.write_text(source_text + "\n", encoding="utf-8")
+        output_path.write_text(translated_text + "\n", encoding="utf-8")
+        metadata_path.write_text(
+            payload.model_dump_json(indent=2) + "\n",
+            encoding="utf-8",
+        )
+    except OSError as exc:
+        raise HTTPException(500, detail=f"Could not save transcript session: {exc}") from exc
+
+    return TranscriptSessionSaveResponse(
+        directory=str(session_dir),
+        input_path=str(input_path),
+        output_path=str(output_path),
+    )
 
 
 static_dir = Path(__file__).parents[1] / "static"

@@ -7,6 +7,7 @@
   export let audioInputOptions: AudioInputOption[] = [];
   export let browserSupported = true;
   export let captureActive = false;
+  export let capturePending = false;
   export let desktopCaptureSupported = true;
   export let microphoneCaptureSupported = true;
   export let meterLevel = 0;
@@ -16,15 +17,17 @@
 
   export let refreshAudioInputOptions: () => void | Promise<void>;
   export let startCapture: () => void | Promise<void>;
-  export let stopCapture: () => void;
+  export let stopCapture: () => void | Promise<void>;
 
   $: selectableAudioInputOptions = audioInputOptions.filter(
     (device) => device.deviceId !== "default",
   );
 
   function toggleCapture(): void {
+    if (capturePending) return;
+
     if (captureActive) {
-      stopCapture();
+      void stopCapture();
       return;
     }
 
@@ -33,7 +36,9 @@
 
   $: captureButtonLabel = captureActive
     ? "Stop translation"
-    : "Start live translation";
+    : capturePending
+      ? "Connecting..."
+      : "Start live translation";
 </script>
 
 <section class="controls" aria-label="Live translation controls">
@@ -79,7 +84,7 @@
         type="button"
         class="secondary"
         onclick={refreshAudioInputOptions}
-        disabled={captureActive}
+        disabled={captureActive || capturePending}
       >
         Refresh inputs
       </button>
@@ -88,12 +93,16 @@
       type="button"
       class="primary-action"
       onclick={toggleCapture}
-      disabled={!captureActive && !browserSupported}
+      disabled={!captureActive && (!browserSupported || capturePending)}
     >
       {captureButtonLabel}
     </button>
   </div>
-  <div class="meter" aria-label="Audio level">
-    <span style={`width: ${meterLevel}%`}></span>
+  <div class="meter-row">
+    <span>Input level</span>
+    <div class="meter" aria-label="Audio level">
+      <span style={`width: ${meterLevel}%`}></span>
+    </div>
+    <span>{captureActive ? `${meterLevel}%` : "Idle"}</span>
   </div>
 </section>

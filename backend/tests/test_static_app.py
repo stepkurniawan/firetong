@@ -109,6 +109,15 @@ def test_browser_app_omits_transcript_export_for_now():
     assert "firetong-transcript.txt" not in app_svelte
 
 
+def test_browser_app_autosaves_transcript_sessions():
+    app_svelte, _, _, _ = read_frontend_source()
+
+    assert "saveTranscriptSession" in app_svelte
+    assert 'fetch("/api/transcript-sessions"' in app_svelte
+    assert "source_text" in app_svelte
+    assert "translated_text" in app_svelte
+
+
 def test_browser_app_omits_runtime_metrics_for_now():
     app_svelte, _, _, _ = read_frontend_source()
 

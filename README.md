@@ -19,6 +19,7 @@ See [LICENSE-free-christian.md](LICENSE-free-christian.md) and [LICENSE-commerci
 - Live source capture through OpenAI Realtime WebRTC transcription.
 - Live translation through OpenAI Realtime Translation WebRTC.
 - Split source/translation panels with auto-scroll and PWA manifest/service worker.
+- Automatic per-session transcript saves with separate input and output text files.
 - Python settings via `pydantic-settings` `BaseSettings`, plus Pytest coverage for config and static app wiring.
 
 ## Run locally
@@ -64,6 +65,11 @@ The Docker image builds the Svelte frontend, copies the generated static files i
 the FastAPI app, and runs Uvicorn on port 8000. Runtime settings are passed through
 Compose from your shell or `.env`; secrets are not copied into the image.
 
+When a live session is stopped, FireTong writes a timestamped folder under
+`saved-sessions` by default. Each session folder contains `input.txt`,
+`output.txt`, and `metadata.json`. With Docker Compose, the container path is
+mounted to `FIRETONG_TRANSCRIPT_HOST_DIR`, which defaults to `./saved-sessions`.
+
 ## Run on a NAS
 
 Use the NAS Compose file when you want the NAS to run the published Docker Hub
@@ -102,6 +108,10 @@ Live translation uses two OpenAI Realtime WebRTC sessions: one reliable transcri
 
 The Python server serves the static app and mints realtime transcription/translation tokens. It does not proxy text translation calls.
 
+When capture stops, the browser sends the current source and translated text to
+the Python server for local autosave. Set `FIRETONG_TRANSCRIPT_SAVE_DIR` to
+choose a different save folder.
+
 FireTong checks for the browser APIs it needs on load: at least one browser audio
 capture path, `RTCPeerConnection`, and `AudioContext`.
 
@@ -130,6 +140,7 @@ Environment variables use the `FIRETONG_` prefix:
 - `FIRETONG_REALTIME_TRANSLATION_MODEL` default: `gpt-realtime-translate`
 - `FIRETONG_REALTIME_TRANSLATION_LANGUAGE` default: `en`
 - `FIRETONG_REALTIME_TRANSCRIPTION_DELAY` default: `low`
+- `FIRETONG_TRANSCRIPT_SAVE_DIR` default: `saved-sessions`
 
 Supported runtime language codes are `id`, `en`, and `de`.
 
@@ -168,3 +179,5 @@ Expected pass criteria:
 - **Microphone input** captures the selected microphone.
 - Speaking the selected input language causes the source panel to update live.
 - The selected output language panel updates live.
+- Stopping a non-empty session creates `input.txt` and `output.txt` in a new
+  folder under the configured transcript save directory.

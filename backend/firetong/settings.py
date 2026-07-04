@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import AnyHttpUrl
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -14,6 +15,7 @@ class Settings(BaseSettings):
     realtime_translation_model: str = "gpt-realtime-translate"
     realtime_translation_language: str = "en"
     realtime_transcription_delay: str = "low"
+    transcript_save_dir: Path = Path("saved-sessions")
 
     model_config = SettingsConfigDict(
         env_file=".env",

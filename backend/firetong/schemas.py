@@ -10,3 +10,18 @@ class AppConfig(BaseModel):
 
 class RealtimeTokenResponse(BaseModel):
     value: str
+
+
+class TranscriptSessionSaveRequest(BaseModel):
+    source_text: str = ""
+    translated_text: str = ""
+    input_language: str
+    output_language: str
+    started_at: str | None = None
+    ended_at: str | None = None
+
+
+class TranscriptSessionSaveResponse(BaseModel):
+    directory: str
+    input_path: str
+    output_path: str

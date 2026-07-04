@@ -9,17 +9,22 @@
     type AppConfig,
     type RealtimeLanguage,
   } from "./app-core";
+  import LiveStatus, { type LiveStatusKind } from "./LiveStatus.svelte";
   import LiveTranslationControls from "./LiveTranslationControls.svelte";
   import { RealtimeCapture, type AudioCaptureMode } from "./realtime";
   import TranscriptPanels from "./TranscriptPanels.svelte";
 
+  const ACTIVE_AUDIO_THRESHOLD = 2;
+  const NO_AUDIO_TIMEOUT_MS = 4500;
+
   let config: AppConfig = { ...DEFAULT_CONFIG };
   let capture: RealtimeCapture | null = null;
 
-  let logMessage = "";
   let browserSupported = true;
   let captureActive = false;
   let testRunning = false;
+  let liveStatus: LiveStatusKind = "ready";
+  let statusMessage = "Choose an audio source and language pair, then start live translation.";
   let audioCaptureMode: AudioCaptureMode = "desktop";
   let inputLanguage: RealtimeLanguage = DEFAULT_CONFIG.realtime_input_language;
   let outputLanguage: RealtimeLanguage = DEFAULT_CONFIG.realtime_translation_language;
@@ -32,11 +37,22 @@
 
   let sourceTranscript = "";
   let translatedTranscript = "";
-  let sourceTextarea: HTMLTextAreaElement | null = null;
-  let translatedTextarea: HTMLTextAreaElement | null = null;
+  let sourceTextarea: HTMLDivElement | null = null;
+  let translatedTextarea: HTMLDivElement | null = null;
+  let lastAudioInputAt = Date.now();
+  let noAudioDetected = false;
+  let sessionStartedAt: string | null = null;
 
   $: inputLanguageLabel = realtimeLanguageLabel(inputLanguage);
   $: outputLanguageLabel = realtimeLanguageLabel(outputLanguage);
+  $: capturePending = liveStatus === "connecting";
+  $: visibleStatus =
+    noAudioDetected && captureActive && liveStatus === "listening" ? "no-audio" : liveStatus;
+  $: visibleStatusTitle = statusTitleFor(visibleStatus);
+  $: visibleStatusMessage =
+    visibleStatus === "no-audio"
+      ? noAudioMessage()
+      : statusMessage;
 
   const supportUrl = "https://paypal.me/stepkurniawan";
   const feedbackEmail = "stepkurniawan.learn@gmail.com";
@@ -45,16 +61,86 @@
   onMount(() => {
     void readConfig();
     void refreshAudioInputOptions();
+    const silenceTimer = window.setInterval(updateNoAudioState, 500);
 
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/service-worker.js").catch(() => {
-        setLog("Service worker registration failed.");
+        setStatusMessage("Service worker registration failed.");
       });
     }
+
+    return () => {
+      window.clearInterval(silenceTimer);
+    };
   });
 
-  function setLog(message: string): void {
-    logMessage = message;
+  function setStatus(status: LiveStatusKind, message: string): void {
+    liveStatus = status;
+    statusMessage = message;
+  }
+
+  function setStatusMessage(message: string): void {
+    statusMessage = message;
+  }
+
+  function statusTitleFor(status: LiveStatusKind): string {
+    if (status === "checking") return "Checking connection";
+    if (status === "connecting") return "Connecting";
+    if (status === "listening") return "Listening";
+    if (status === "no-audio") return "No audio detected";
+    if (status === "reconnecting") return "Reconnecting";
+    if (status === "error") return "Needs attention";
+    if (status === "stopped") return "Stopped";
+    if (status === "unsupported") return "Browser unsupported";
+    return "Ready";
+  }
+
+  function noAudioMessage(): string {
+    if (audioCaptureMode === "microphone") {
+      return "The session is live, but the selected microphone is not picking up sound.";
+    }
+
+    return "The session is live, but no shared tab or desktop audio is coming through.";
+  }
+
+  function handleRealtimeState(state: string): void {
+    if (state === "Connecting") {
+      setStatus("connecting", "Connecting realtime transcription and translation.");
+      return;
+    }
+    if (state === "Live") {
+      setStatus("listening", "Listening and translating in real time.");
+      return;
+    }
+    if (state === "Reconnecting") {
+      setStatus("reconnecting", "The realtime connection dropped. Waiting for it to recover.");
+      return;
+    }
+    if (state === "Error") {
+      setStatus("error", "Realtime translation stopped because the connection failed.");
+      return;
+    }
+    if (state === "Stopped") {
+      setStatus("stopped", "Capture stopped. Start again when you are ready.");
+    }
+  }
+
+  function updateNoAudioState(): void {
+    if (!captureActive || liveStatus !== "listening") {
+      noAudioDetected = false;
+      return;
+    }
+
+    noAudioDetected = Date.now() - lastAudioInputAt > NO_AUDIO_TIMEOUT_MS;
+  }
+
+  function updateMeter(levelPercent: number): void {
+    meterLevel = levelPercent;
+    if (levelPercent > ACTIVE_AUDIO_THRESHOLD) {
+      lastAudioInputAt = Date.now();
+      noAudioDetected = false;
+    }
+    updateNoAudioState();
   }
 
   function checkBrowserSupport(): boolean {
@@ -66,7 +152,7 @@
     }
 
     browserSupported = false;
-    setLog(`This browser is missing: ${missing.join(", ")}.`);
+    setStatus("unsupported", `This browser is missing: ${missing.join(", ")}.`);
     return false;
   }
 
@@ -110,7 +196,7 @@
         outputLanguage = config.realtime_translation_language;
       }
     } catch {
-      setLog("Using built-in browser defaults.");
+      setStatusMessage("Using built-in browser defaults. Choose settings and start translation.");
     }
 
     checkBrowserSupport();
@@ -148,15 +234,17 @@
       {
         onCapturingChange: (isCapturing) => {
           captureActive = isCapturing;
+          if (isCapturing) {
+            lastAudioInputAt = Date.now();
+            noAudioDetected = false;
+          }
         },
-        onLog: setLog,
-        onMeter: (levelPercent) => {
-          meterLevel = levelPercent;
-        },
+        onLog: setStatusMessage,
+        onMeter: updateMeter,
         onResetTranscripts: resetRealtimeState,
         onSourceComplete: () => {},
         onSourceDelta: markSourceProgress,
-        onState: () => {},
+        onState: handleRealtimeState,
         onTranslationDelta: appendTranslatedText,
       },
     );
@@ -166,10 +254,13 @@
     if (!checkBrowserSupport()) return;
     if (!selectedCaptureSourceSupported()) {
       const sourceLabel = audioCaptureMode === "desktop" ? "Desktop/tab" : "Microphone";
-      setLog(`${sourceLabel} audio capture is unavailable.`);
+      setStatus("error", `${sourceLabel} audio capture is unavailable.`);
       return;
     }
 
+    setStatus("connecting", "Requesting audio capture and connecting realtime sessions.");
+    lastAudioInputAt = Date.now();
+    noAudioDetected = false;
     capture = buildCapture();
     try {
       await capture.start({
@@ -178,21 +269,85 @@
         microphoneDeviceId: selectedAudioInputId,
         outputLanguage,
       });
+      sessionStartedAt = new Date().toISOString();
       void refreshAudioInputOptions();
     } catch (error) {
       captureActive = false;
-      setLog(error instanceof Error ? error.message : String(error));
+      capture = null;
+      sessionStartedAt = null;
+      setStatus("error", error instanceof Error ? error.message : String(error));
       void refreshAudioInputOptions();
     }
   }
 
-  function stopCapture(): void {
+  async function saveTranscriptSession(
+    sourceText: string,
+    translatedText: string,
+    sessionInputLanguage: RealtimeLanguage,
+    sessionOutputLanguage: RealtimeLanguage,
+    startedAt: string | null,
+    endedAt: string,
+  ): Promise<void> {
+    if (!sourceText.trim() && !translatedText.trim()) return;
+
+    const response = await fetch("/api/transcript-sessions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        source_text: sourceText,
+        translated_text: translatedText,
+        input_language: sessionInputLanguage,
+        output_language: sessionOutputLanguage,
+        started_at: startedAt,
+        ended_at: endedAt,
+      }),
+    });
+
+    if (!response.ok) throw new Error(await response.text());
+
+    const data = (await response.json()) as { directory?: string };
+    setStatus(
+      "stopped",
+      `Capture stopped. Session transcripts saved to ${data.directory || "the save folder"}.`,
+    );
+  }
+
+  async function stopCapture(): Promise<void> {
+    const sessionSourceTranscript = sourceTranscript;
+    const sessionTranslatedTranscript = translatedTranscript;
+    const sessionInputLanguage = inputLanguage;
+    const sessionOutputLanguage = outputLanguage;
+    const startedAt = sessionStartedAt;
+    const endedAt = new Date().toISOString();
+
     capture?.stop();
     capture = null;
+    sessionStartedAt = null;
+
+    try {
+      await saveTranscriptSession(
+        sessionSourceTranscript,
+        sessionTranslatedTranscript,
+        sessionInputLanguage,
+        sessionOutputLanguage,
+        startedAt,
+        endedAt,
+      );
+    } catch (error) {
+      setStatus(
+        "error",
+        `Capture stopped, but transcript autosave failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
   }
 
   async function testServerConnection(): Promise<void> {
     testRunning = true;
+    setStatus("checking", "Checking realtime transcription and translation endpoints.");
     try {
       const [transcriptionResponse, translationResponse] = await Promise.all([
         fetch(buildRealtimeLanguageUrl("/api/realtime/token", "input_language", inputLanguage)),
@@ -206,13 +361,14 @@
       ]);
 
       if (transcriptionResponse.ok && translationResponse.ok) {
-        setLog("Realtime transcription and translation test passed.");
+        setStatus("ready", "Realtime transcription and translation test passed.");
       } else {
         const failedResponse = transcriptionResponse.ok ? translationResponse : transcriptionResponse;
-        setLog(`Realtime transcription/translation test failed: ${await failedResponse.text()}`);
+        setStatus("error", `Realtime transcription/translation test failed: ${await failedResponse.text()}`);
       }
     } catch (error) {
-      setLog(
+      setStatus(
+        "error",
         `Realtime transcription/translation test failed: ${
           error instanceof Error ? error.message : String(error)
         }`,
@@ -226,79 +382,54 @@
 
 <main class="app">
   <header class="topbar">
-    <div>
+    <div class="brand">
       <h1>FireTong</h1>
-      <p>Pronounced "Fire Tongue"</p>
+      <p class="pronunciation">Pronounced "Fire Tongue"</p>
+      <p>Live sermon translation across Indonesian, English, and German.</p>
     </div>
-    <a class="support-action" href={supportUrl} target="_blank" rel="noreferrer">
-      Fuel FireTong
-    </a>
-    <button
-      type="button"
-      class="secondary topbar-action"
-      onclick={testServerConnection}
-      disabled={testRunning}
-    >
-      {testRunning ? "Checking..." : "Check connection"}
-    </button>
+    <div class="topbar-actions" aria-label="Project actions">
+      <button
+        type="button"
+        class="secondary topbar-action"
+        onclick={testServerConnection}
+        disabled={testRunning || captureActive || capturePending}
+      >
+        {testRunning ? "Checking..." : "Check connection"}
+      </button>
+      <a class="button-link" href={`mailto:${feedbackEmail}`}>Send feedback</a>
+      <a class="button-link" href={supportUrl} target="_blank" rel="noreferrer">
+        Fuel FireTong
+      </a>
+    </div>
   </header>
 
-  <section class="intro" aria-labelledby="intro-title">
-    <div class="intro-copy">
-      <p class="eyebrow">Live sermon translation</p>
-      <h2 id="intro-title">Follow sermons across Indonesian, English, and German.</h2>
-      <p>
-        FireTong helps listeners, guests, missionaries, bilingual families, and
-        church communities follow preaching in real time. Choose a browser tab,
-        desktop audio, or microphone, set the source and translation language,
-        then read both transcripts side by side.
-      </p>
-      <p class="author-line">
-        Created by Stephen Kurniawan.
-      </p>
-    </div>
-    <div class="intro-actions" aria-label="Project actions">
-      <a class="button-link" href={`mailto:${feedbackEmail}`}>Send feedback</a>
-    </div>
-  </section>
+  <section class="live-console" aria-label="Live translation setup">
+    <LiveTranslationControls
+      bind:audioCaptureMode
+      bind:inputLanguage
+      bind:outputLanguage
+      bind:selectedAudioInputId
+      {audioInputOptions}
+      {browserSupported}
+      {captureActive}
+      {capturePending}
+      {desktopCaptureSupported}
+      {meterLevel}
+      {microphoneCaptureSupported}
+      {refreshAudioInputOptions}
+      {startCapture}
+      {stopCapture}
+    />
 
-  <section class="guide" aria-label="How FireTong works">
-    <div>
-      <span>1</span>
-      <p>Choose desktop, tab, or microphone audio.</p>
-    </div>
-    <div>
-      <span>2</span>
-      <p>Set the input and output languages.</p>
-    </div>
-    <div>
-      <span>3</span>
-      <p>Start live translation during the sermon.</p>
-    </div>
+    <LiveStatus
+      status={visibleStatus}
+      title={visibleStatusTitle}
+      message={visibleStatusMessage}
+      {captureActive}
+      sourceLanguageLabel={inputLanguageLabel}
+      translatedLanguageLabel={outputLanguageLabel}
+    />
   </section>
-
-  <section class="notice" aria-label="Privacy and training notice">
-    <strong>Before you start:</strong>
-    Audio is streamed to AI provider for transcription and translation.
-    Transcripts may be stored and used to improve FireTong, so only use sermon
-    audio or other content you have permission to process.
-  </section>
-
-  <LiveTranslationControls
-    bind:audioCaptureMode
-    bind:inputLanguage
-    bind:outputLanguage
-    bind:selectedAudioInputId
-    {audioInputOptions}
-    {browserSupported}
-    {captureActive}
-    {desktopCaptureSupported}
-    {meterLevel}
-    {microphoneCaptureSupported}
-    {refreshAudioInputOptions}
-    {startCapture}
-    {stopCapture}
-  />
 
   <TranscriptPanels
     bind:sourceTextarea
@@ -309,13 +440,17 @@
     translatedLanguageLabel={outputLanguageLabel}
   />
 
-  <p class="log">{logMessage}</p>
-
   <footer class="footer">
-    <p>
-      Support helps pay for realtime translation credit, like adding fuel for the
-      next sermon.
-    </p>
+    <div class="footer-copy">
+      <p>
+        Support helps pay for realtime translation credit, like adding fuel for the
+        next sermon.
+      </p>
+      <p>
+        Audio is streamed to an AI provider. Transcripts may be stored and used
+        to improve FireTong.
+      </p>
+    </div>
     <nav aria-label="Footer links">
       <a href={supportUrl} target="_blank" rel="noreferrer">Fuel FireTong</a>
       <a href={`mailto:${feedbackEmail}`}>{feedbackEmail}</a>

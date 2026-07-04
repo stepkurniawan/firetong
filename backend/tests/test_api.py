@@ -1,3 +1,5 @@
+import json
+
 from backend.firetong.main import app
 from backend.firetong.settings import Settings, get_settings
 from fastapi.testclient import TestClient
@@ -209,4 +211,56 @@ def test_realtime_token_route_accepts_browser_api_key_override(monkeypatch):
             "server_api_key": None,
         }
     ]
+    app.dependency_overrides.clear()
+
+
+def test_transcript_session_route_saves_input_output_files(tmp_path):
+    app.dependency_overrides[get_settings] = override_settings(transcript_save_dir=tmp_path)
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/transcript-sessions",
+        json={
+            "source_text": "Selamat pagi",
+            "translated_text": "Good morning",
+            "input_language": "id",
+            "output_language": "en",
+            "started_at": "2026-07-04T07:00:00.000Z",
+            "ended_at": "2026-07-04T07:05:00.000Z",
+        },
+    )
+
+    assert response.status_code == 200
+    saved_directory = tmp_path / response.json()["directory"].split("/")[-1]
+    assert saved_directory.is_dir()
+    assert (saved_directory / "input.txt").read_text() == "Selamat pagi\n"
+    assert (saved_directory / "output.txt").read_text() == "Good morning\n"
+    assert json.loads((saved_directory / "metadata.json").read_text()) == {
+        "source_text": "Selamat pagi",
+        "translated_text": "Good morning",
+        "input_language": "id",
+        "output_language": "en",
+        "started_at": "2026-07-04T07:00:00.000Z",
+        "ended_at": "2026-07-04T07:05:00.000Z",
+    }
+    app.dependency_overrides.clear()
+
+
+def test_transcript_session_route_rejects_empty_session(tmp_path):
+    app.dependency_overrides[get_settings] = override_settings(transcript_save_dir=tmp_path)
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/transcript-sessions",
+        json={
+            "source_text": " ",
+            "translated_text": "",
+            "input_language": "id",
+            "output_language": "en",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "At least one transcript field is required."}
+    assert list(tmp_path.iterdir()) == []
     app.dependency_overrides.clear()

@@ -15,7 +15,8 @@ def test_vite_dev_server_proxies_api_to_local_backend():
 
 def test_generated_backend_static_assets_are_ignored_but_directory_exists():
     gitignore = Path(".gitignore").read_text()
+    static_gitignore = Path("backend/static/.gitignore").read_text()
 
     assert "backend/static/*" in gitignore
-    assert "!backend/static/.gitkeep" in gitignore
-    assert Path("backend/static/.gitkeep").exists()
+    assert "!backend/static/.gitignore" in gitignore
+    assert static_gitignore == "*\n!.gitignore\n"
