@@ -62,26 +62,28 @@
         </select>
       </label>
     {/if}
-    <label class="control-field language-field">
-      <span>Input language</span>
-      <select bind:value={inputLanguage} disabled={captureActive}>
-        {#each REALTIME_LANGUAGE_OPTIONS as language}
-          <option value={language.value} disabled={language.value === outputLanguage}>
-            {language.label}
-          </option>
-        {/each}
-      </select>
-    </label>
-    <label class="control-field language-field">
-      <span>Output language</span>
-      <select bind:value={outputLanguage} disabled={captureActive}>
-        {#each REALTIME_LANGUAGE_OPTIONS as language}
-          <option value={language.value} disabled={language.value === inputLanguage}>
-            {language.label}
-          </option>
-        {/each}
-      </select>
-    </label>
+    <div class="language-pair">
+      <label class="control-field language-field">
+        <span>Input language</span>
+        <select bind:value={inputLanguage} disabled={captureActive}>
+          {#each REALTIME_LANGUAGE_OPTIONS as language}
+            <option value={language.value} disabled={language.value === outputLanguage}>
+              {language.label}
+            </option>
+          {/each}
+        </select>
+      </label>
+      <label class="control-field language-field">
+        <span>Output language</span>
+        <select bind:value={outputLanguage} disabled={captureActive}>
+          {#each REALTIME_LANGUAGE_OPTIONS as language}
+            <option value={language.value} disabled={language.value === inputLanguage}>
+              {language.label}
+            </option>
+          {/each}
+        </select>
+      </label>
+    </div>
   </div>
   <div class="action-group" aria-label="Capture actions">
     {#if audioCaptureMode === "microphone"}

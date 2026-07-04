@@ -214,6 +214,13 @@ h2 {
   flex-basis: 280px;
 }
 
+.language-pair {
+  display: grid;
+  flex: 0 1 432px;
+  grid-template-columns: repeat(2, minmax(0, 210px));
+  gap: 12px;
+}
+
 .control-field span {
   font-size: 13px;
   font-weight: 650;
@@ -448,6 +455,12 @@ h2 {
   .control-group,
   .action-group,
   .control-field {
+    width: 100%;
+  }
+
+  .language-pair {
+    flex: 1 1 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
   }
 
