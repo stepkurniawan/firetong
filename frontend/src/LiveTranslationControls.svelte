@@ -9,6 +9,7 @@
   export let captureActive = false;
   export let capturePending = false;
   export let desktopCaptureSupported = true;
+  export let languagePairValid = true;
   export let microphoneCaptureSupported = true;
   export let meterLevel = 0;
   export let inputLanguage: RealtimeLanguage = "id";
@@ -65,7 +66,9 @@
       <span>Input language</span>
       <select bind:value={inputLanguage} disabled={captureActive}>
         {#each REALTIME_LANGUAGE_OPTIONS as language}
-          <option value={language.value}>{language.label}</option>
+          <option value={language.value} disabled={language.value === outputLanguage}>
+            {language.label}
+          </option>
         {/each}
       </select>
     </label>
@@ -73,7 +76,9 @@
       <span>Output language</span>
       <select bind:value={outputLanguage} disabled={captureActive}>
         {#each REALTIME_LANGUAGE_OPTIONS as language}
-          <option value={language.value}>{language.label}</option>
+          <option value={language.value} disabled={language.value === inputLanguage}>
+            {language.label}
+          </option>
         {/each}
       </select>
     </label>
@@ -93,7 +98,7 @@
       type="button"
       class="primary-action"
       onclick={toggleCapture}
-      disabled={!captureActive && (!browserSupported || capturePending)}
+      disabled={!captureActive && (!browserSupported || capturePending || !languagePairValid)}
     >
       {captureButtonLabel}
     </button>

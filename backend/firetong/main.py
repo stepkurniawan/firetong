@@ -1,5 +1,3 @@
-import json
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -14,14 +12,12 @@ from backend.firetong.schemas import (
     TranscriptSessionSaveResponse,
 )
 from backend.firetong.settings import SUPPORTED_REALTIME_LANGUAGES, Settings, get_settings
+from backend.firetong.transcript_sessions import (
+    EmptyTranscriptSessionError,
+    save_transcript_session_files,
+)
 
 app = FastAPI(title="FireTong MVP")
-
-TRANSCRIPT_FILE_LANGUAGE_NAMES = {
-    "id": "indonesian",
-    "en": "english",
-    "de": "german",
-}
 
 
 def resolve_realtime_language(
@@ -35,6 +31,14 @@ def resolve_realtime_language(
 
     allowed_languages = ", ".join(SUPPORTED_REALTIME_LANGUAGES)
     raise HTTPException(422, detail=f"{field_name} must be one of: {allowed_languages}.")
+
+
+def ensure_distinct_realtime_languages(input_language: str, output_language: str) -> None:
+    if input_language == output_language:
+        raise HTTPException(
+            422,
+            detail="input_language and output_language must be different.",
+        )
 
 
 @app.get("/api/config", response_model=AppConfig)
@@ -159,11 +163,6 @@ def save_transcript_session(
     payload: TranscriptSessionSaveRequest,
     settings: Settings = Depends(get_settings),
 ) -> TranscriptSessionSaveResponse:
-    source_text = payload.source_text.strip()
-    translated_text = payload.translated_text.strip()
-    if not source_text and not translated_text:
-        raise HTTPException(422, detail="At least one transcript field is required.")
-
     input_language = resolve_realtime_language(
         payload.input_language,
         settings.realtime_input_language,
@@ -174,47 +173,19 @@ def save_transcript_session(
         settings.realtime_translation_language,
         "output_language",
     )
-
-    timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S.%fZ")
-    save_dir = settings.transcript_save_dir
-    input_dir = save_dir / "input"
-    output_dir = save_dir / "output"
-    input_path = input_dir / f"{timestamp}-{TRANSCRIPT_FILE_LANGUAGE_NAMES[input_language]}.txt"
-    output_path = output_dir / f"{timestamp}-{TRANSCRIPT_FILE_LANGUAGE_NAMES[output_language]}.txt"
-    metadata_path = save_dir / f"{timestamp}-metadata.json"
+    ensure_distinct_realtime_languages(input_language, output_language)
 
     try:
-        input_dir.mkdir(parents=True, exist_ok=True)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        input_path.write_text(source_text + "\n", encoding="utf-8")
-        output_path.write_text(translated_text + "\n", encoding="utf-8")
-        metadata_path.write_text(
-            json.dumps(
-                {
-                    "timestamp": timestamp,
-                    "input_language": input_language,
-                    "input_language_name": TRANSCRIPT_FILE_LANGUAGE_NAMES[input_language],
-                    "output_language": output_language,
-                    "output_language_name": TRANSCRIPT_FILE_LANGUAGE_NAMES[output_language],
-                    "started_at": payload.started_at,
-                    "ended_at": payload.ended_at,
-                    "input_path": str(input_path),
-                    "output_path": str(output_path),
-                },
-                indent=2,
-            )
-            + "\n",
-            encoding="utf-8",
+        return save_transcript_session_files(
+            payload,
+            settings.transcript_save_dir,
+            input_language,
+            output_language,
         )
+    except EmptyTranscriptSessionError as exc:
+        raise HTTPException(422, detail="At least one transcript field is required.") from exc
     except OSError as exc:
         raise HTTPException(500, detail=f"Could not save transcript session: {exc}") from exc
-
-    return TranscriptSessionSaveResponse(
-        directory=str(save_dir),
-        input_path=str(input_path),
-        output_path=str(output_path),
-        metadata_path=str(metadata_path),
-    )
 
 
 static_dir = Path(__file__).parents[1] / "static"

@@ -67,9 +67,9 @@ Compose from your shell or `.env`; secrets are not copied into the image.
 
 When a live session is stopped, FireTong writes timestamped text files under
 `saved-sessions/input` and `saved-sessions/output` by default, for example
-`input/20260704T073012.123456Z-indonesian.txt` and
-`output/20260704T073012.123456Z-english.txt`, plus a matching
-`20260704T073012.123456Z-metadata.json` file with the language codes, session
+`input/2026-07-04-07-30-id.txt` and
+`output/2026-07-04-07-30-en.txt`, plus a matching
+`2026-07-04-07-30-metadata.json` file with the language codes, session
 times, and saved file paths. With Docker Compose, the container path is mounted
 to `FIRETONG_TRANSCRIPT_HOST_DIR`, which defaults to `./saved-sessions`.
 

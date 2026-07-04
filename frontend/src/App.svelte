@@ -4,6 +4,8 @@
   import {
     buildRealtimeLanguageUrl,
     DEFAULT_CONFIG,
+    firstDifferentRealtimeLanguage,
+    hasDistinctRealtimeLanguages,
     missingBrowserFeatures,
     realtimeLanguageLabel,
     type AppConfig,
@@ -43,8 +45,12 @@
   let noAudioDetected = false;
   let sessionStartedAt: string | null = null;
 
+  $: if (inputLanguage === outputLanguage && !captureActive) {
+    outputLanguage = firstDifferentRealtimeLanguage(inputLanguage);
+  }
   $: inputLanguageLabel = realtimeLanguageLabel(inputLanguage);
   $: outputLanguageLabel = realtimeLanguageLabel(outputLanguage);
+  $: languagePairValid = hasDistinctRealtimeLanguages(inputLanguage, outputLanguage);
   $: capturePending = liveStatus === "connecting";
   $: visibleStatus =
     noAudioDetected && captureActive && liveStatus === "listening" ? "no-audio" : liveStatus;
@@ -101,6 +107,10 @@
     }
 
     return "The session is live, but no shared tab or desktop audio is coming through.";
+  }
+
+  function languagePairErrorMessage(): string {
+    return "Input and output languages must be different.";
   }
 
   function handleRealtimeState(state: string): void {
@@ -251,6 +261,10 @@
   }
 
   async function startCapture(): Promise<void> {
+    if (!languagePairValid) {
+      setStatus("error", languagePairErrorMessage());
+      return;
+    }
     if (!checkBrowserSupport()) return;
     if (!selectedCaptureSourceSupported()) {
       const sourceLabel = audioCaptureMode === "desktop" ? "Desktop/tab" : "Microphone";
@@ -346,6 +360,11 @@
   }
 
   async function testServerConnection(): Promise<void> {
+    if (!languagePairValid) {
+      setStatus("error", languagePairErrorMessage());
+      return;
+    }
+
     testRunning = true;
     setStatus("checking", "Checking realtime transcription and translation endpoints.");
     try {
@@ -392,7 +411,7 @@
         type="button"
         class="secondary topbar-action"
         onclick={testServerConnection}
-        disabled={testRunning || captureActive || capturePending}
+        disabled={testRunning || captureActive || capturePending || !languagePairValid}
       >
         {testRunning ? "Checking..." : "Check connection"}
       </button>
@@ -414,6 +433,7 @@
       {captureActive}
       {capturePending}
       {desktopCaptureSupported}
+      {languagePairValid}
       {meterLevel}
       {microphoneCaptureSupported}
       {refreshAudioInputOptions}

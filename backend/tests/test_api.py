@@ -236,14 +236,14 @@ def test_transcript_session_route_saves_input_output_files(tmp_path):
 
     input_dir = tmp_path / "input"
     output_dir = tmp_path / "output"
-    input_file = next(path for path in input_dir.iterdir() if path.name.endswith("-indonesian.txt"))
-    output_file = next(path for path in output_dir.iterdir() if path.name.endswith("-english.txt"))
+    input_file = next(path for path in input_dir.iterdir() if path.name.endswith("-id.txt"))
+    output_file = next(path for path in output_dir.iterdir() if path.name.endswith("-en.txt"))
     metadata_file = next(
         path for path in tmp_path.iterdir() if path.name.endswith("-metadata.json")
     )
-    assert re.fullmatch(r"\d{8}T\d{6}\.\d{6}Z-indonesian\.txt", input_file.name)
-    assert re.fullmatch(r"\d{8}T\d{6}\.\d{6}Z-english\.txt", output_file.name)
-    assert re.fullmatch(r"\d{8}T\d{6}\.\d{6}Z-metadata\.json", metadata_file.name)
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-id\.txt", input_file.name)
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-en\.txt", output_file.name)
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-metadata\.json", metadata_file.name)
     assert input_file.read_text() == "Selamat pagi\n"
     assert output_file.read_text() == "Good morning\n"
     assert sorted(path.name for path in tmp_path.iterdir()) == sorted(
@@ -265,7 +265,7 @@ def test_transcript_session_route_saves_input_output_files(tmp_path):
     app.dependency_overrides.clear()
 
 
-def test_transcript_session_route_separates_same_language_input_and_output(tmp_path):
+def test_transcript_session_route_rejects_same_input_and_output_language(tmp_path):
     app.dependency_overrides[get_settings] = override_settings(transcript_save_dir=tmp_path)
     client = TestClient(app)
 
@@ -279,16 +279,33 @@ def test_transcript_session_route_separates_same_language_input_and_output(tmp_p
         },
     )
 
-    assert response.status_code == 200
-    input_files = sorted(path.name for path in (tmp_path / "input").iterdir())
-    output_files = sorted(path.name for path in (tmp_path / "output").iterdir())
-    metadata_files = sorted(path.name for path in tmp_path.iterdir() if path.is_file())
-    assert len(input_files) == 1
-    assert len(output_files) == 1
-    assert input_files[0].endswith("-english.txt")
-    assert output_files[0].endswith("-english.txt")
-    assert len(metadata_files) == 1
-    assert metadata_files[0].endswith("-metadata.json")
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": "input_language and output_language must be different."
+    }
+    assert list(tmp_path.iterdir()) == []
+    app.dependency_overrides.clear()
+
+
+def test_transcript_session_route_does_not_overwrite_same_minute_sessions(tmp_path):
+    app.dependency_overrides[get_settings] = override_settings(transcript_save_dir=tmp_path)
+    client = TestClient(app)
+
+    for _ in range(2):
+        response = client.post(
+            "/api/transcript-sessions",
+            json={
+                "source_text": "Selamat pagi",
+                "translated_text": "Good morning",
+                "input_language": "id",
+                "output_language": "en",
+            },
+        )
+        assert response.status_code == 200
+
+    assert len(list((tmp_path / "input").iterdir())) == 2
+    assert len(list((tmp_path / "output").iterdir())) == 2
+    assert len([path for path in tmp_path.iterdir() if path.name.endswith("-metadata.json")]) == 2
     app.dependency_overrides.clear()
 
 

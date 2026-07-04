@@ -34,6 +34,17 @@ export function realtimeLanguageLabel(language: RealtimeLanguage): string {
   return REALTIME_LANGUAGE_OPTIONS.find((option) => option.value === language)?.label ?? language;
 }
 
+export function hasDistinctRealtimeLanguages(
+  inputLanguage: RealtimeLanguage,
+  outputLanguage: RealtimeLanguage,
+): boolean {
+  return inputLanguage !== outputLanguage;
+}
+
+export function firstDifferentRealtimeLanguage(language: RealtimeLanguage): RealtimeLanguage {
+  return REALTIME_LANGUAGE_OPTIONS.find((option) => option.value !== language)?.value ?? language;
+}
+
 type BrowserFeatureWindow = Window & {
   RTCPeerConnection?: unknown;
   AudioContext?: unknown;
