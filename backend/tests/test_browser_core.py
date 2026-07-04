@@ -7,8 +7,10 @@ def test_browser_core_defaults_are_defined_for_runtime_config():
     app_core = APP_CORE_TS.read_text()
 
     assert 'openai_base_url: "https://api.openai.com/v1"' in app_core
+    assert 'realtime_input_language: "id"' in app_core
     assert 'realtime_translation_model: "gpt-realtime-translate"' in app_core
     assert 'realtime_translation_language: "en"' in app_core
+    assert 'value: "de", label: "German"' in app_core
 
 
 def test_browser_core_feature_check_reports_capture_prerequisites():

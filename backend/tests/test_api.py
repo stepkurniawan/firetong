@@ -19,6 +19,7 @@ def test_config_reports_openai_model_defaults():
     assert response.status_code == 200
     assert response.json() == {
         "openai_base_url": "https://api.openai.com/v1",
+        "realtime_input_language": "id",
         "realtime_translation_model": "gpt-realtime-translate",
         "realtime_translation_language": "en",
     }
@@ -59,7 +60,7 @@ def test_realtime_translation_token_route_creates_translation_session(monkeypatc
     app.dependency_overrides[get_settings] = override_settings(openai_api_key="test-key")
     client = TestClient(app)
 
-    response = client.get("/api/realtime/translation-token")
+    response = client.get("/api/realtime/translation-token?output_language=de")
 
     assert response.status_code == 200
     assert response.json() == {"value": "translation-secret"}
@@ -70,7 +71,7 @@ def test_realtime_translation_token_route_creates_translation_session(monkeypatc
             "model": "gpt-realtime-translate",
             "audio": {
                 "output": {
-                    "language": "en",
+                    "language": "de",
                 },
             },
         }
@@ -106,7 +107,7 @@ def test_realtime_token_route_creates_transcription_session(monkeypatch):
     app.dependency_overrides[get_settings] = override_settings(openai_api_key="test-key")
     client = TestClient(app)
 
-    response = client.get("/api/realtime/token")
+    response = client.get("/api/realtime/token?input_language=en")
 
     assert response.status_code == 200
     assert response.json() == {"value": "ephemeral-secret"}
@@ -119,7 +120,7 @@ def test_realtime_token_route_creates_transcription_session(monkeypatch):
                 "input": {
                     "transcription": {
                         "model": "gpt-realtime-whisper",
-                        "language": "id",
+                        "language": "en",
                         "delay": "low",
                     },
                     "turn_detection": None,
@@ -129,6 +130,31 @@ def test_realtime_token_route_creates_transcription_session(monkeypatch):
     }
     assert calls[0]["files"] is None
     assert calls[0]["model"] == "gpt-realtime-whisper"
+    app.dependency_overrides.clear()
+
+
+def test_realtime_token_routes_reject_unsupported_languages(monkeypatch):
+    async def fake_post_to_openai(
+        settings,
+        path,
+        api_key_override=None,
+        json_data=None,
+        form_data=None,
+        files=None,
+    ):
+        return {"value": "should-not-be-used"}
+
+    monkeypatch.setattr("backend.firetong.main.post_to_openai", fake_post_to_openai)
+    app.dependency_overrides[get_settings] = override_settings(openai_api_key="test-key")
+    client = TestClient(app)
+
+    transcription_response = client.get("/api/realtime/token?input_language=fr")
+    translation_response = client.get("/api/realtime/translation-token?output_language=fr")
+
+    assert transcription_response.status_code == 422
+    assert transcription_response.json() == {"detail": "input_language must be one of: id, en, de."}
+    assert translation_response.status_code == 422
+    assert translation_response.json() == {"detail": "output_language must be one of: id, en, de."}
     app.dependency_overrides.clear()
 
 

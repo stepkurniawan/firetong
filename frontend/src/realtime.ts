@@ -1,4 +1,8 @@
-import type { AppConfig } from "./app-core";
+import {
+  buildRealtimeLanguageUrl,
+  type AppConfig,
+  type RealtimeLanguage,
+} from "./app-core";
 import {
   applyRealtimeTranscriptionEvent,
   applyRealtimeTranslationEvent,
@@ -23,6 +27,8 @@ const TRANSCRIPTION_COMMIT_IDLE_MS = 900;
 export type AudioCaptureMode = "desktop" | "microphone";
 
 export type AudioCaptureOptions = {
+  inputLanguage: RealtimeLanguage;
+  outputLanguage: RealtimeLanguage;
   mode: AudioCaptureMode;
   microphoneDeviceId?: string;
 };
@@ -48,7 +54,7 @@ export class RealtimeCapture {
     private readonly callbacks: CaptureCallbacks,
   ) {}
 
-  async start(options: AudioCaptureOptions = { mode: "desktop" }): Promise<void> {
+  async start(options: AudioCaptureOptions): Promise<void> {
     this.stream = await this.captureAudio(options);
 
     const audioTracks = this.stream.getAudioTracks();
@@ -61,8 +67,8 @@ export class RealtimeCapture {
 
     try {
       await Promise.all([
-        this.startRealtimeTranscription(audioTracks),
-        this.startRealtimeTranslation(audioTracks),
+        this.startRealtimeTranscription(audioTracks, options.inputLanguage),
+        this.startRealtimeTranslation(audioTracks, options.outputLanguage),
       ]);
       this.callbacks.onCapturingChange(true);
     } catch (error) {
@@ -116,8 +122,14 @@ export class RealtimeCapture {
     return "No audio track was shared. Choose a tab/window and enable audio sharing.";
   }
 
-  private async fetchRealtimeTranslationToken(): Promise<string> {
-    const response = await fetch("/api/realtime/translation-token");
+  private async fetchRealtimeTranslationToken(outputLanguage: RealtimeLanguage): Promise<string> {
+    const response = await fetch(
+      buildRealtimeLanguageUrl(
+        "/api/realtime/translation-token",
+        "output_language",
+        outputLanguage,
+      ),
+    );
     if (!response.ok) throw new Error(await response.text());
 
     const data = (await response.json()) as { value?: string };
@@ -127,8 +139,10 @@ export class RealtimeCapture {
     return data.value;
   }
 
-  private async fetchRealtimeToken(): Promise<string> {
-    const response = await fetch("/api/realtime/token");
+  private async fetchRealtimeToken(inputLanguage: RealtimeLanguage): Promise<string> {
+    const response = await fetch(
+      buildRealtimeLanguageUrl("/api/realtime/token", "input_language", inputLanguage),
+    );
     if (!response.ok) throw new Error(await response.text());
 
     const data = (await response.json()) as { value?: string };
@@ -195,8 +209,11 @@ export class RealtimeCapture {
     applyRealtimeTranslationEvent(event, this.eventState, this.callbacks);
   }
 
-  private async startRealtimeTranscription(audioTracks: MediaStreamTrack[]): Promise<void> {
-    const realtimeToken = await this.fetchRealtimeToken();
+  private async startRealtimeTranscription(
+    audioTracks: MediaStreamTrack[],
+    inputLanguage: RealtimeLanguage,
+  ): Promise<void> {
+    const realtimeToken = await this.fetchRealtimeToken(inputLanguage);
     const audioTrack = audioTracks[0].clone();
     const audioStream = new MediaStream([audioTrack]);
 
@@ -253,11 +270,14 @@ export class RealtimeCapture {
     });
   }
 
-  private async startRealtimeTranslation(audioTracks: MediaStreamTrack[]): Promise<void> {
+  private async startRealtimeTranslation(
+    audioTracks: MediaStreamTrack[],
+    outputLanguage: RealtimeLanguage,
+  ): Promise<void> {
     this.callbacks.onState("Connecting");
     this.callbacks.onLog("Connecting OpenAI Realtime translation...");
 
-    const translationToken = await this.fetchRealtimeTranslationToken();
+    const translationToken = await this.fetchRealtimeTranslationToken(outputLanguage);
     const audioTrack = audioTracks[0].clone();
     const audioStream = new MediaStream([audioTrack]);
     this.startMeter(new MediaStream(audioTracks));

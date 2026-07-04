@@ -1,7 +1,14 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
   import { listAudioInputOptions, type AudioInputOption } from "./audio-devices";
-  import { DEFAULT_CONFIG, missingBrowserFeatures, type AppConfig } from "./app-core";
+  import {
+    buildRealtimeLanguageUrl,
+    DEFAULT_CONFIG,
+    missingBrowserFeatures,
+    realtimeLanguageLabel,
+    type AppConfig,
+    type RealtimeLanguage,
+  } from "./app-core";
   import LiveTranslationControls from "./LiveTranslationControls.svelte";
   import { RealtimeCapture, type AudioCaptureMode } from "./realtime";
   import TranscriptPanels from "./TranscriptPanels.svelte";
@@ -14,6 +21,8 @@
   let captureActive = false;
   let testRunning = false;
   let audioCaptureMode: AudioCaptureMode = "desktop";
+  let inputLanguage: RealtimeLanguage = DEFAULT_CONFIG.realtime_input_language;
+  let outputLanguage: RealtimeLanguage = DEFAULT_CONFIG.realtime_translation_language;
   let selectedAudioInputId = "default";
   let audioInputOptions: AudioInputOption[] = [];
   let desktopCaptureSupported = true;
@@ -25,6 +34,9 @@
   let translatedTranscript = "";
   let sourceTextarea: HTMLTextAreaElement | null = null;
   let translatedTextarea: HTMLTextAreaElement | null = null;
+
+  $: inputLanguageLabel = realtimeLanguageLabel(inputLanguage);
+  $: outputLanguageLabel = realtimeLanguageLabel(outputLanguage);
 
   const supportUrl = "https://paypal.me/stepkurniawan";
   const feedbackEmail = "stepkurniawan.learn@gmail.com";
@@ -94,6 +106,8 @@
       const response = await fetch("/api/config");
       if (response.ok) {
         config = (await response.json()) as AppConfig;
+        inputLanguage = config.realtime_input_language;
+        outputLanguage = config.realtime_translation_language;
       }
     } catch {
       setLog("Using built-in browser defaults.");
@@ -159,8 +173,10 @@
     capture = buildCapture();
     try {
       await capture.start({
+        inputLanguage,
         mode: audioCaptureMode,
         microphoneDeviceId: selectedAudioInputId,
+        outputLanguage,
       });
       void refreshAudioInputOptions();
     } catch (error) {
@@ -179,8 +195,14 @@
     testRunning = true;
     try {
       const [transcriptionResponse, translationResponse] = await Promise.all([
-        fetch("/api/realtime/token"),
-        fetch("/api/realtime/translation-token"),
+        fetch(buildRealtimeLanguageUrl("/api/realtime/token", "input_language", inputLanguage)),
+        fetch(
+          buildRealtimeLanguageUrl(
+            "/api/realtime/translation-token",
+            "output_language",
+            outputLanguage,
+          ),
+        ),
       ]);
 
       if (transcriptionResponse.ok && translationResponse.ok) {
@@ -224,12 +246,12 @@
   <section class="intro" aria-labelledby="intro-title">
     <div class="intro-copy">
       <p class="eyebrow">Live sermon translation</p>
-      <h2 id="intro-title">Follow Indonesian sermons in English, as they happen.</h2>
+      <h2 id="intro-title">Follow sermons across Indonesian, English, and German.</h2>
       <p>
-        FireTong helps English-speaking listeners, guests, missionaries, bilingual
-        families, and church communities follow Indonesian preaching in real time.
-        Choose a browser tab, desktop audio, or microphone, then read the Indonesian
-        source and English translation side by side.
+        FireTong helps listeners, guests, missionaries, bilingual families, and
+        church communities follow preaching in real time. Choose a browser tab,
+        desktop audio, or microphone, set the source and translation language,
+        then read both transcripts side by side.
       </p>
       <p class="author-line">
         Created by Stephen Kurniawan.
@@ -247,11 +269,11 @@
     </div>
     <div>
       <span>2</span>
-      <p>Start live translation during the sermon.</p>
+      <p>Set the input and output languages.</p>
     </div>
     <div>
       <span>3</span>
-      <p>Read Indonesian and English text together.</p>
+      <p>Start live translation during the sermon.</p>
     </div>
   </section>
 
@@ -264,6 +286,8 @@
 
   <LiveTranslationControls
     bind:audioCaptureMode
+    bind:inputLanguage
+    bind:outputLanguage
     bind:selectedAudioInputId
     {audioInputOptions}
     {browserSupported}
@@ -279,8 +303,10 @@
   <TranscriptPanels
     bind:sourceTextarea
     bind:sourceTranscript
+    sourceLanguageLabel={inputLanguageLabel}
     bind:translatedTextarea
     bind:translatedTranscript
+    translatedLanguageLabel={outputLanguageLabel}
   />
 
   <p class="log">{logMessage}</p>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { AudioInputOption } from "./audio-devices";
+  import { REALTIME_LANGUAGE_OPTIONS, type RealtimeLanguage } from "./app-core";
   import type { AudioCaptureMode } from "./realtime";
 
   export let audioCaptureMode: AudioCaptureMode = "desktop";
@@ -9,6 +10,8 @@
   export let desktopCaptureSupported = true;
   export let microphoneCaptureSupported = true;
   export let meterLevel = 0;
+  export let inputLanguage: RealtimeLanguage = "id";
+  export let outputLanguage: RealtimeLanguage = "en";
   export let selectedAudioInputId = "default";
 
   export let refreshAudioInputOptions: () => void | Promise<void>;
@@ -53,6 +56,22 @@
         </select>
       </label>
     {/if}
+    <label class="control-field language-field">
+      <span>Input language</span>
+      <select bind:value={inputLanguage} disabled={captureActive}>
+        {#each REALTIME_LANGUAGE_OPTIONS as language}
+          <option value={language.value}>{language.label}</option>
+        {/each}
+      </select>
+    </label>
+    <label class="control-field language-field">
+      <span>Output language</span>
+      <select bind:value={outputLanguage} disabled={captureActive}>
+        {#each REALTIME_LANGUAGE_OPTIONS as language}
+          <option value={language.value}>{language.label}</option>
+        {/each}
+      </select>
+    </label>
   </div>
   <div class="action-group" aria-label="Capture actions">
     {#if audioCaptureMode === "microphone"}

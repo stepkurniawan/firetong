@@ -78,10 +78,12 @@ def test_browser_app_uses_realtime_translation_only():
 def test_live_capture_wires_both_transcription_and_translation_sessions():
     app_svelte, realtime_ts, _, _ = read_frontend_source()
 
-    assert "this.startRealtimeTranscription(audioTracks)" in realtime_ts
-    assert "this.startRealtimeTranslation(audioTracks)" in realtime_ts
-    assert 'fetch("/api/realtime/token"' in realtime_ts
-    assert 'fetch("/api/realtime/translation-token"' in realtime_ts
+    assert "this.startRealtimeTranscription(audioTracks, options.inputLanguage)" in realtime_ts
+    assert "this.startRealtimeTranslation(audioTracks, options.outputLanguage)" in realtime_ts
+    assert '"/api/realtime/token"' in realtime_ts
+    assert '"/api/realtime/translation-token"' in realtime_ts
+    assert "input_language" in app_svelte + realtime_ts
+    assert "output_language" in app_svelte + realtime_ts
     assert "openaiApiKeyHeaders()" not in realtime_ts
     assert "fetch(`${this.config.openai_base_url}/realtime/calls`" in realtime_ts
     assert "fetch(`${this.config.openai_base_url}/realtime/translations/calls`" in realtime_ts

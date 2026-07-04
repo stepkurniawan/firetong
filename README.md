@@ -1,6 +1,6 @@
 # firetong
 
-FireTong (read: "Fire Tongue") MVP: capture shared browser audio, translate Indonesian sermon speech to English live, and display the source and translation in one browser page.
+FireTong (read: "Fire Tongue") MVP: capture shared browser audio, translate sermon speech live between Indonesian, English, and German, and display the source and translation in one browser page.
 
 ## License
 
@@ -16,9 +16,9 @@ See [LICENSE-free-christian.md](LICENSE-free-christian.md) and [LICENSE-commerci
 
 - Svelte + TypeScript browser UI served by a tiny FastAPI local server.
 - Browser audio capture from shared desktop/tab audio or a selected microphone.
-- Live Indonesian source capture through OpenAI Realtime WebRTC transcription.
-- Live English translation through OpenAI Realtime Translation WebRTC.
-- Split Indonesian/English panels with auto-scroll and PWA manifest/service worker.
+- Live source capture through OpenAI Realtime WebRTC transcription.
+- Live translation through OpenAI Realtime Translation WebRTC.
+- Split source/translation panels with auto-scroll and PWA manifest/service worker.
 - Python settings via `pydantic-settings` `BaseSettings`, plus Pytest coverage for config and static app wiring.
 
 ## Run locally
@@ -92,12 +92,13 @@ requests to FastAPI. The production frontend build is written to
 `backend/static`, which is the directory mounted by FastAPI in the Docker image
 and production-style local runs.
 
-In Chrome or Edge, click **Test OpenAI**, choose **Desktop or tab audio** or
-**Microphone input**, then click **Start live translation**. For desktop/tab
-audio, choose the sermon tab or screen in the browser picker and enable audio
-sharing. For microphone input, choose the preferred microphone before starting.
+In Chrome or Edge, click **Check connection**, choose **Desktop or tab audio** or
+**Microphone input**, choose the input and output languages, then click **Start
+live translation**. For desktop/tab audio, choose the sermon tab or screen in
+the browser picker and enable audio sharing. For microphone input, choose the
+preferred microphone before starting.
 
-Live translation uses two OpenAI Realtime WebRTC sessions: one reliable transcription sidecar for Indonesian source text and one translation session for English transcript. The backend mints short-lived realtime tokens, and the browser streams captured tab audio directly to OpenAI.
+Live translation uses two OpenAI Realtime WebRTC sessions: one reliable transcription sidecar for source text and one translation session for the translated transcript. The backend mints short-lived realtime tokens, and the browser streams captured tab audio directly to OpenAI.
 
 The Python server serves the static app and mints realtime transcription/translation tokens. It does not proxy text translation calls.
 
@@ -125,9 +126,12 @@ Environment variables use the `FIRETONG_` prefix:
 - `FIRETONG_OPENAI_BASE_URL` default: `https://api.openai.com/v1`
 - `FIRETONG_OPENAI_API_KEY` required for transcription and translation
 - `FIRETONG_TRANSCRIPTION_MODEL` default: `gpt-realtime-whisper`
+- `FIRETONG_REALTIME_INPUT_LANGUAGE` default: `id`
 - `FIRETONG_REALTIME_TRANSLATION_MODEL` default: `gpt-realtime-translate`
 - `FIRETONG_REALTIME_TRANSLATION_LANGUAGE` default: `en`
 - `FIRETONG_REALTIME_TRANSCRIPTION_DELAY` default: `low`
+
+Supported runtime language codes are `id`, `en`, and `de`.
 
 ## Test
 
@@ -158,9 +162,9 @@ Use Chrome or Edge at http://127.0.0.1:8000.
 Expected pass criteria:
 
 - Status shows `Ready` after load.
-- **Test OpenAI** reports `Realtime translation test passed.`
+- **Check connection** reports `Realtime translation test passed.`
 - **Start live translation** allows tab/window sharing with audio enabled when
   **Desktop or tab audio** is selected.
 - **Microphone input** captures the selected microphone.
-- Speaking Indonesian audio causes the Indonesian panel to update live.
-- The English panel updates live.
+- Speaking the selected input language causes the source panel to update live.
+- The selected output language panel updates live.

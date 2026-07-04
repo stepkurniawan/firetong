@@ -3,11 +3,14 @@ from functools import lru_cache
 from pydantic import AnyHttpUrl
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+SUPPORTED_REALTIME_LANGUAGES = ("id", "en", "de")
+
 
 class Settings(BaseSettings):
     openai_base_url: AnyHttpUrl = "https://api.openai.com/v1"
     openai_api_key: str | None = None
     transcription_model: str = "gpt-realtime-whisper"
+    realtime_input_language: str = "id"
     realtime_translation_model: str = "gpt-realtime-translate"
     realtime_translation_language: str = "en"
     realtime_transcription_delay: str = "low"

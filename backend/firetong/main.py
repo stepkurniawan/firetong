@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
 from httpx import AsyncClient, HTTPError
 
@@ -9,15 +9,29 @@ from backend.firetong.schemas import (
     AppConfig,
     RealtimeTokenResponse,
 )
-from backend.firetong.settings import Settings, get_settings
+from backend.firetong.settings import SUPPORTED_REALTIME_LANGUAGES, Settings, get_settings
 
 app = FastAPI(title="FireTong MVP")
+
+
+def resolve_realtime_language(
+    requested_language: str | None,
+    default_language: str,
+    field_name: str,
+) -> str:
+    language = (requested_language or default_language).strip().lower()
+    if language in SUPPORTED_REALTIME_LANGUAGES:
+        return language
+
+    allowed_languages = ", ".join(SUPPORTED_REALTIME_LANGUAGES)
+    raise HTTPException(422, detail=f"{field_name} must be one of: {allowed_languages}.")
 
 
 @app.get("/api/config", response_model=AppConfig)
 def read_config(settings: Settings = Depends(get_settings)) -> AppConfig:
     return AppConfig(
         openai_base_url=str(settings.openai_base_url).rstrip("/"),
+        realtime_input_language=settings.realtime_input_language,
         realtime_translation_model=settings.realtime_translation_model,
         realtime_translation_language=settings.realtime_translation_language,
     )
@@ -55,9 +69,16 @@ async def post_to_openai(
 
 @app.get("/api/realtime/translation-token", response_model=RealtimeTokenResponse)
 async def create_realtime_translation_token(
+    output_language: Annotated[str | None, Query()] = None,
     settings: Settings = Depends(get_settings),
     openai_api_key: Annotated[str | None, Header(alias="X-OpenAI-API-Key")] = None,
 ) -> RealtimeTokenResponse:
+    selected_output_language = resolve_realtime_language(
+        output_language,
+        settings.realtime_translation_language,
+        "output_language",
+    )
+
     response = await post_to_openai(
         settings,
         "/realtime/translations/client_secrets",
@@ -67,7 +88,7 @@ async def create_realtime_translation_token(
                 "model": settings.realtime_translation_model,
                 "audio": {
                     "output": {
-                        "language": settings.realtime_translation_language,
+                        "language": selected_output_language,
                     },
                 },
             }
@@ -85,9 +106,16 @@ async def create_realtime_translation_token(
 
 @app.get("/api/realtime/token", response_model=RealtimeTokenResponse)
 async def create_realtime_token(
+    input_language: Annotated[str | None, Query()] = None,
     settings: Settings = Depends(get_settings),
     openai_api_key: Annotated[str | None, Header(alias="X-OpenAI-API-Key")] = None,
 ) -> RealtimeTokenResponse:
+    selected_input_language = resolve_realtime_language(
+        input_language,
+        settings.realtime_input_language,
+        "input_language",
+    )
+
     response = await post_to_openai(
         settings,
         "/realtime/client_secrets",
@@ -99,7 +127,7 @@ async def create_realtime_token(
                     "input": {
                         "transcription": {
                             "model": settings.transcription_model,
-                            "language": "id",
+                            "language": selected_input_language,
                             "delay": settings.realtime_transcription_delay,
                         },
                         "turn_detection": None,
