@@ -9,7 +9,7 @@ def test_settings_read_firetong_environment(monkeypatch):
     monkeypatch.setenv("FIRETONG_REALTIME_TRANSCRIPTION_DELAY", "minimal")
     monkeypatch.setenv("FIRETONG_TRANSCRIPT_SAVE_DIR", "/tmp/firetong-test-transcripts")
 
-    settings = Settings()
+    settings = Settings(_env_file=None)
 
     assert settings.transcription_model == "gpt-realtime-test"
     assert settings.realtime_input_language == "en"

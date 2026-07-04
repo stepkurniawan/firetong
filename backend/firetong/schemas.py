@@ -25,3 +25,4 @@ class TranscriptSessionSaveResponse(BaseModel):
     directory: str
     input_path: str
     output_path: str
+    metadata_path: str

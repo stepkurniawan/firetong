@@ -1,4 +1,5 @@
 import json
+import re
 
 from backend.firetong.main import app
 from backend.firetong.settings import Settings, get_settings
@@ -7,7 +8,7 @@ from fastapi.testclient import TestClient
 
 def override_settings(**values):
     def _override():
-        return Settings(**values)
+        return Settings(_env_file=None, **values)
 
     return _override
 
@@ -231,18 +232,63 @@ def test_transcript_session_route_saves_input_output_files(tmp_path):
     )
 
     assert response.status_code == 200
-    saved_directory = tmp_path / response.json()["directory"].split("/")[-1]
-    assert saved_directory.is_dir()
-    assert (saved_directory / "input.txt").read_text() == "Selamat pagi\n"
-    assert (saved_directory / "output.txt").read_text() == "Good morning\n"
-    assert json.loads((saved_directory / "metadata.json").read_text()) == {
-        "source_text": "Selamat pagi",
-        "translated_text": "Good morning",
+    assert response.json()["directory"] == str(tmp_path)
+
+    input_dir = tmp_path / "input"
+    output_dir = tmp_path / "output"
+    input_file = next(path for path in input_dir.iterdir() if path.name.endswith("-indonesian.txt"))
+    output_file = next(path for path in output_dir.iterdir() if path.name.endswith("-english.txt"))
+    metadata_file = next(
+        path for path in tmp_path.iterdir() if path.name.endswith("-metadata.json")
+    )
+    assert re.fullmatch(r"\d{8}T\d{6}\.\d{6}Z-indonesian\.txt", input_file.name)
+    assert re.fullmatch(r"\d{8}T\d{6}\.\d{6}Z-english\.txt", output_file.name)
+    assert re.fullmatch(r"\d{8}T\d{6}\.\d{6}Z-metadata\.json", metadata_file.name)
+    assert input_file.read_text() == "Selamat pagi\n"
+    assert output_file.read_text() == "Good morning\n"
+    assert sorted(path.name for path in tmp_path.iterdir()) == sorted(
+        ["input", "output", metadata_file.name]
+    )
+    assert sorted(path.name for path in input_dir.iterdir()) == [input_file.name]
+    assert sorted(path.name for path in output_dir.iterdir()) == [output_file.name]
+    assert json.loads(metadata_file.read_text()) == {
+        "timestamp": metadata_file.name.removesuffix("-metadata.json"),
         "input_language": "id",
+        "input_language_name": "indonesian",
         "output_language": "en",
+        "output_language_name": "english",
         "started_at": "2026-07-04T07:00:00.000Z",
         "ended_at": "2026-07-04T07:05:00.000Z",
+        "input_path": str(input_file),
+        "output_path": str(output_file),
     }
+    app.dependency_overrides.clear()
+
+
+def test_transcript_session_route_separates_same_language_input_and_output(tmp_path):
+    app.dependency_overrides[get_settings] = override_settings(transcript_save_dir=tmp_path)
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/transcript-sessions",
+        json={
+            "source_text": "Good morning",
+            "translated_text": "Good morning",
+            "input_language": "en",
+            "output_language": "en",
+        },
+    )
+
+    assert response.status_code == 200
+    input_files = sorted(path.name for path in (tmp_path / "input").iterdir())
+    output_files = sorted(path.name for path in (tmp_path / "output").iterdir())
+    metadata_files = sorted(path.name for path in tmp_path.iterdir() if path.is_file())
+    assert len(input_files) == 1
+    assert len(output_files) == 1
+    assert input_files[0].endswith("-english.txt")
+    assert output_files[0].endswith("-english.txt")
+    assert len(metadata_files) == 1
+    assert metadata_files[0].endswith("-metadata.json")
     app.dependency_overrides.clear()
 
 

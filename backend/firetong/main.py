@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
@@ -15,6 +16,12 @@ from backend.firetong.schemas import (
 from backend.firetong.settings import SUPPORTED_REALTIME_LANGUAGES, Settings, get_settings
 
 app = FastAPI(title="FireTong MVP")
+
+TRANSCRIPT_FILE_LANGUAGE_NAMES = {
+    "id": "indonesian",
+    "en": "english",
+    "de": "german",
+}
 
 
 def resolve_realtime_language(
@@ -169,28 +176,44 @@ def save_transcript_session(
     )
 
     timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S.%fZ")
-    session_dir = (
-        settings.transcript_save_dir / f"{timestamp}-{input_language}-to-{output_language}"
-    )
-    input_path = session_dir / "input.txt"
-    output_path = session_dir / "output.txt"
-    metadata_path = session_dir / "metadata.json"
+    save_dir = settings.transcript_save_dir
+    input_dir = save_dir / "input"
+    output_dir = save_dir / "output"
+    input_path = input_dir / f"{timestamp}-{TRANSCRIPT_FILE_LANGUAGE_NAMES[input_language]}.txt"
+    output_path = output_dir / f"{timestamp}-{TRANSCRIPT_FILE_LANGUAGE_NAMES[output_language]}.txt"
+    metadata_path = save_dir / f"{timestamp}-metadata.json"
 
     try:
-        session_dir.mkdir(parents=True, exist_ok=False)
+        input_dir.mkdir(parents=True, exist_ok=True)
+        output_dir.mkdir(parents=True, exist_ok=True)
         input_path.write_text(source_text + "\n", encoding="utf-8")
         output_path.write_text(translated_text + "\n", encoding="utf-8")
         metadata_path.write_text(
-            payload.model_dump_json(indent=2) + "\n",
+            json.dumps(
+                {
+                    "timestamp": timestamp,
+                    "input_language": input_language,
+                    "input_language_name": TRANSCRIPT_FILE_LANGUAGE_NAMES[input_language],
+                    "output_language": output_language,
+                    "output_language_name": TRANSCRIPT_FILE_LANGUAGE_NAMES[output_language],
+                    "started_at": payload.started_at,
+                    "ended_at": payload.ended_at,
+                    "input_path": str(input_path),
+                    "output_path": str(output_path),
+                },
+                indent=2,
+            )
+            + "\n",
             encoding="utf-8",
         )
     except OSError as exc:
         raise HTTPException(500, detail=f"Could not save transcript session: {exc}") from exc
 
     return TranscriptSessionSaveResponse(
-        directory=str(session_dir),
+        directory=str(save_dir),
         input_path=str(input_path),
         output_path=str(output_path),
+        metadata_path=str(metadata_path),
     )
 
 

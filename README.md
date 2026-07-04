@@ -65,10 +65,13 @@ The Docker image builds the Svelte frontend, copies the generated static files i
 the FastAPI app, and runs Uvicorn on port 8000. Runtime settings are passed through
 Compose from your shell or `.env`; secrets are not copied into the image.
 
-When a live session is stopped, FireTong writes a timestamped folder under
-`saved-sessions` by default. Each session folder contains `input.txt`,
-`output.txt`, and `metadata.json`. With Docker Compose, the container path is
-mounted to `FIRETONG_TRANSCRIPT_HOST_DIR`, which defaults to `./saved-sessions`.
+When a live session is stopped, FireTong writes timestamped text files under
+`saved-sessions/input` and `saved-sessions/output` by default, for example
+`input/20260704T073012.123456Z-indonesian.txt` and
+`output/20260704T073012.123456Z-english.txt`, plus a matching
+`20260704T073012.123456Z-metadata.json` file with the language codes, session
+times, and saved file paths. With Docker Compose, the container path is mounted
+to `FIRETONG_TRANSCRIPT_HOST_DIR`, which defaults to `./saved-sessions`.
 
 ## Run on a NAS
 
@@ -179,5 +182,6 @@ Expected pass criteria:
 - **Microphone input** captures the selected microphone.
 - Speaking the selected input language causes the source panel to update live.
 - The selected output language panel updates live.
-- Stopping a non-empty session creates `input.txt` and `output.txt` in a new
-  folder under the configured transcript save directory.
+- Stopping a non-empty session creates timestamp-language `.txt` files under
+  `input` and `output` folders, plus a matching metadata JSON file under the
+  configured transcript save directory.
