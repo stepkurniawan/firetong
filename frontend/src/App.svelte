@@ -413,7 +413,14 @@
       ];
       if (inputTranscriptEnabled) {
         endpointChecks.unshift(
-          fetch(buildRealtimeLanguageUrl("/api/realtime/token", "input_language", inputLanguage)),
+          fetch(
+            buildRealtimeLanguageUrl(
+              "/api/realtime/token",
+              "input_language",
+              inputLanguage,
+              { output_language: outputLanguage },
+            ),
+          ),
         );
       }
 

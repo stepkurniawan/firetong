@@ -11,6 +11,7 @@ from backend.firetong.runtime_config import (
     DEFAULT_REALTIME_TRANSLATION_LANGUAGE,
     DEFAULT_REALTIME_TRANSLATION_MODEL,
     DEFAULT_TRANSCRIPTION_MODEL,
+    DEFAULT_TRANSCRIPTION_PROMPT,
 )
 
 
@@ -22,6 +23,7 @@ class Settings(BaseSettings):
     realtime_translation_model: str = DEFAULT_REALTIME_TRANSLATION_MODEL
     realtime_translation_language: str = DEFAULT_REALTIME_TRANSLATION_LANGUAGE
     realtime_transcription_delay: str = DEFAULT_REALTIME_TRANSCRIPTION_DELAY
+    transcription_prompt: str = DEFAULT_TRANSCRIPTION_PROMPT
     transcript_save_dir: Path = Path("saved-sessions")
     feedback_email_to: str = "stepkurniawan.learn@gmail.com"
     feedback_email_from: str | None = None

@@ -39,8 +39,12 @@ export function buildRealtimeLanguageUrl(
   path: string,
   languageParam: RealtimeLanguageParam,
   language: RealtimeLanguage,
+  additionalLanguageParams: Partial<Record<RealtimeLanguageParam, RealtimeLanguage>> = {},
 ): string {
   const params = new URLSearchParams({ [languageParam]: language });
+  Object.entries(additionalLanguageParams).forEach(([param, value]) => {
+    if (value) params.set(param, value);
+  });
   return `${path}?${params.toString()}`;
 }
 

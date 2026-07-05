@@ -28,16 +28,14 @@ export function languagePairErrorMessage(): string {
 export function formatUsd(value: number | null): string {
   if (value === null) return "--";
 
-  if (value > 0 && value < 0.01) {
-    return "< $0.01";
-  }
+  const roundedUpValue = Math.ceil(Math.max(0, value - Number.EPSILON) * 10) / 10;
 
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(roundedUpValue);
 }
 
 export function formatDuration(totalSeconds: number): string {

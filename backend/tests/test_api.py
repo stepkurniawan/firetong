@@ -2,8 +2,17 @@ import json
 import re
 
 from backend.firetong.main import app
+from backend.firetong.runtime_config import (
+    DEFAULT_REALTIME_TRANSLATION_MODEL,
+    DEFAULT_TRANSCRIPTION_MODEL,
+    REALTIME_DURATION_RATES_USD_PER_MINUTE,
+)
 from backend.firetong.settings import Settings, get_settings
 from fastapi.testclient import TestClient
+
+
+def expected_duration_cost_usd(model: str, duration_seconds: float) -> float:
+    return round((duration_seconds / 60) * REALTIME_DURATION_RATES_USD_PER_MINUTE[model], 6)
 
 
 def override_settings(**values):
@@ -31,10 +40,7 @@ def test_config_reports_openai_model_defaults():
             {"value": "en", "label": "English"},
             {"value": "de", "label": "German"},
         ],
-        "realtime_duration_rates_usd_per_minute": {
-            "gpt-realtime-whisper": 0.017,
-            "gpt-realtime-translate": 0.034,
-        },
+        "realtime_duration_rates_usd_per_minute": REALTIME_DURATION_RATES_USD_PER_MINUTE,
     }
     app.dependency_overrides.clear()
 
@@ -117,10 +123,16 @@ def test_realtime_token_route_creates_transcription_session(monkeypatch):
         return {"value": "ephemeral-secret"}
 
     monkeypatch.setattr("backend.firetong.main.post_to_openai", fake_post_to_openai)
-    app.dependency_overrides[get_settings] = override_settings(openai_api_key="test-key")
+    app.dependency_overrides[get_settings] = override_settings(
+        openai_api_key="test-key",
+        transcription_prompt=(
+            "Transcribe {{ input_language_name }} ({{ input_language }}) for listeners using "
+            "{{ output_language_name }} ({{ output_language }})."
+        ),
+    )
     client = TestClient(app)
 
-    response = client.get("/api/realtime/token?input_language=en")
+    response = client.get("/api/realtime/token?input_language=en&output_language=de")
 
     assert response.status_code == 200
     assert response.json() == {"value": "ephemeral-secret"}
@@ -135,6 +147,7 @@ def test_realtime_token_route_creates_transcription_session(monkeypatch):
                         "model": "gpt-realtime-whisper",
                         "language": "en",
                         "delay": "low",
+                        "prompt": "Transcribe English (en) for listeners using German (de).",
                     },
                     "turn_detection": None,
                 }
@@ -162,12 +175,39 @@ def test_realtime_token_routes_reject_unsupported_languages(monkeypatch):
     client = TestClient(app)
 
     transcription_response = client.get("/api/realtime/token?input_language=fr")
+    transcription_output_response = client.get("/api/realtime/token?output_language=fr")
     translation_response = client.get("/api/realtime/translation-token?output_language=fr")
 
     assert transcription_response.status_code == 422
     assert transcription_response.json() == {"detail": "input_language must be one of: id, en, de."}
+    assert transcription_output_response.status_code == 422
+    assert transcription_output_response.json() == {
+        "detail": "output_language must be one of: id, en, de."
+    }
     assert translation_response.status_code == 422
     assert translation_response.json() == {"detail": "output_language must be one of: id, en, de."}
+    app.dependency_overrides.clear()
+
+
+def test_realtime_token_route_rejects_same_input_and_output_language(monkeypatch):
+    async def fake_post_to_openai(
+        settings,
+        path,
+        api_key_override=None,
+        json_data=None,
+        form_data=None,
+        files=None,
+    ):
+        return {"value": "should-not-be-used"}
+
+    monkeypatch.setattr("backend.firetong.main.post_to_openai", fake_post_to_openai)
+    app.dependency_overrides[get_settings] = override_settings(openai_api_key="test-key")
+    client = TestClient(app)
+
+    response = client.get("/api/realtime/token?input_language=en&output_language=en")
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "input_language and output_language must be different."}
     app.dependency_overrides.clear()
 
 
@@ -262,6 +302,37 @@ def test_transcript_session_route_saves_input_output_files(tmp_path):
     )
     assert sorted(path.name for path in input_dir.iterdir()) == [input_file.name]
     assert sorted(path.name for path in output_dir.iterdir()) == [output_file.name]
+    duration_seconds = 300.0
+    transcription_cost = expected_duration_cost_usd(DEFAULT_TRANSCRIPTION_MODEL, duration_seconds)
+    translation_cost = expected_duration_cost_usd(
+        DEFAULT_REALTIME_TRANSLATION_MODEL, duration_seconds
+    )
+    expected_cost = {
+        "currency": "USD",
+        "estimated_total_usd": round(transcription_cost + translation_cost, 6),
+        "sessions": [
+            {
+                "name": "transcription",
+                "model": DEFAULT_TRANSCRIPTION_MODEL,
+                "pricing_basis": "duration",
+                "duration_seconds": duration_seconds,
+                "rate_usd_per_minute": REALTIME_DURATION_RATES_USD_PER_MINUTE[
+                    DEFAULT_TRANSCRIPTION_MODEL
+                ],
+                "estimated_cost_usd": transcription_cost,
+            },
+            {
+                "name": "translation",
+                "model": DEFAULT_REALTIME_TRANSLATION_MODEL,
+                "pricing_basis": "duration",
+                "duration_seconds": duration_seconds,
+                "rate_usd_per_minute": REALTIME_DURATION_RATES_USD_PER_MINUTE[
+                    DEFAULT_REALTIME_TRANSLATION_MODEL
+                ],
+                "estimated_cost_usd": translation_cost,
+            },
+        ],
+    }
     assert json.loads(metadata_file.read_text()) == {
         "timestamp": metadata_file.name.removesuffix("-metadata.json"),
         "input_language": "id",
@@ -272,51 +343,9 @@ def test_transcript_session_route_saves_input_output_files(tmp_path):
         "ended_at": "2026-07-04T07:05:00.000Z",
         "input_path": str(input_file),
         "output_path": str(output_file),
-        "cost": {
-            "currency": "USD",
-            "estimated_total_usd": 0.255,
-            "sessions": [
-                {
-                    "name": "transcription",
-                    "model": "gpt-realtime-whisper",
-                    "pricing_basis": "duration",
-                    "duration_seconds": 300.0,
-                    "rate_usd_per_minute": 0.017,
-                    "estimated_cost_usd": 0.085,
-                },
-                {
-                    "name": "translation",
-                    "model": "gpt-realtime-translate",
-                    "pricing_basis": "duration",
-                    "duration_seconds": 300.0,
-                    "rate_usd_per_minute": 0.034,
-                    "estimated_cost_usd": 0.17,
-                },
-            ],
-        },
+        "cost": expected_cost,
     }
-    assert response_data["cost"] == {
-        "currency": "USD",
-        "estimated_total_usd": 0.255,
-        "sessions": [
-            {
-                "name": "transcription",
-                "model": "gpt-realtime-whisper",
-                "pricing_basis": "duration",
-                "duration_seconds": 300.0,
-                "rate_usd_per_minute": 0.017,
-                "estimated_cost_usd": 0.085,
-            },
-            {
-                "name": "translation",
-                "model": "gpt-realtime-translate",
-                "pricing_basis": "duration",
-                "duration_seconds": 300.0,
-                "rate_usd_per_minute": 0.034,
-                "estimated_cost_usd": 0.17,
-            },
-        ],
-    }
+    assert response_data["cost"] == expected_cost
     app.dependency_overrides.clear()
 
 
@@ -351,15 +380,21 @@ def test_transcript_session_route_saves_output_without_input_file(tmp_path):
     metadata = json.loads(metadata_file.read_text())
     assert metadata["input_path"] is None
     assert metadata["output_path"] == str(output_file)
-    assert metadata["cost"]["estimated_total_usd"] == 0.17
+    duration_seconds = 300.0
+    translation_cost = expected_duration_cost_usd(
+        DEFAULT_REALTIME_TRANSLATION_MODEL, duration_seconds
+    )
+    assert metadata["cost"]["estimated_total_usd"] == translation_cost
     assert metadata["cost"]["sessions"] == [
         {
             "name": "translation",
-            "model": "gpt-realtime-translate",
+            "model": DEFAULT_REALTIME_TRANSLATION_MODEL,
             "pricing_basis": "duration",
-            "duration_seconds": 300.0,
-            "rate_usd_per_minute": 0.034,
-            "estimated_cost_usd": 0.17,
+            "duration_seconds": duration_seconds,
+            "rate_usd_per_minute": REALTIME_DURATION_RATES_USD_PER_MINUTE[
+                DEFAULT_REALTIME_TRANSLATION_MODEL
+            ],
+            "estimated_cost_usd": translation_cost,
         }
     ]
     app.dependency_overrides.clear()

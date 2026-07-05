@@ -79,7 +79,8 @@ def test_live_capture_wires_both_transcription_and_translation_sessions():
     app_svelte, realtime_ts, _, _ = read_frontend_source()
 
     assert "options.inputTranscriptEnabled" in realtime_ts
-    assert "this.startRealtimeTranscription(audioTracks, options.inputLanguage)" in realtime_ts
+    assert "options.outputLanguage" in realtime_ts
+    assert "this.startRealtimeTranscription(" in realtime_ts
     assert "this.startRealtimeTranslation(audioTracks, options.outputLanguage)" in realtime_ts
     assert '"/api/realtime/token"' in realtime_ts
     assert '"/api/realtime/translation-token"' in realtime_ts

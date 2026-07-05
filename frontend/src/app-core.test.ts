@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildRealtimeLanguageUrl,
   firstDifferentRealtimeLanguage,
   hasDistinctRealtimeLanguages,
   missingBrowserFeatures,
@@ -52,4 +53,13 @@ test("firstDifferentRealtimeLanguage returns a different supported language", ()
   assert.notEqual(firstDifferentRealtimeLanguage("id"), "id");
   assert.notEqual(firstDifferentRealtimeLanguage("en"), "en");
   assert.notEqual(firstDifferentRealtimeLanguage("de"), "de");
+});
+
+test("buildRealtimeLanguageUrl can include both realtime language params", () => {
+  assert.equal(
+    buildRealtimeLanguageUrl("/api/realtime/token", "input_language", "id", {
+      output_language: "en",
+    }),
+    "/api/realtime/token?input_language=id&output_language=en",
+  );
 });

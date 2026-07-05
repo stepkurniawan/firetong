@@ -73,7 +73,11 @@ export class RealtimeCapture {
       ];
       if (options.inputTranscriptEnabled) {
         realtimeSessions.unshift(
-          this.startRealtimeTranscription(audioTracks, options.inputLanguage),
+          this.startRealtimeTranscription(
+            audioTracks,
+            options.inputLanguage,
+            options.outputLanguage,
+          ),
         );
       }
       await Promise.all(realtimeSessions);
@@ -146,9 +150,17 @@ export class RealtimeCapture {
     return data.value;
   }
 
-  private async fetchRealtimeToken(inputLanguage: RealtimeLanguage): Promise<string> {
+  private async fetchRealtimeToken(
+    inputLanguage: RealtimeLanguage,
+    outputLanguage: RealtimeLanguage,
+  ): Promise<string> {
     const response = await fetch(
-      buildRealtimeLanguageUrl("/api/realtime/token", "input_language", inputLanguage),
+      buildRealtimeLanguageUrl(
+        "/api/realtime/token",
+        "input_language",
+        inputLanguage,
+        { output_language: outputLanguage },
+      ),
     );
     if (!response.ok) throw new Error(await response.text());
 
@@ -219,8 +231,9 @@ export class RealtimeCapture {
   private async startRealtimeTranscription(
     audioTracks: MediaStreamTrack[],
     inputLanguage: RealtimeLanguage,
+    outputLanguage: RealtimeLanguage,
   ): Promise<void> {
-    const realtimeToken = await this.fetchRealtimeToken(inputLanguage);
+    const realtimeToken = await this.fetchRealtimeToken(inputLanguage, outputLanguage);
     const audioTrack = audioTracks[0].clone();
     const audioStream = new MediaStream([audioTrack]);
 
