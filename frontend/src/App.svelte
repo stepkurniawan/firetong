@@ -16,6 +16,13 @@
   import LiveTranslationControls from "./LiveTranslationControls.svelte";
   import { RealtimeCapture, type AudioCaptureMode } from "./realtime";
   import TranscriptPanels from "./TranscriptPanels.svelte";
+  import {
+    formatDuration,
+    formatUsd,
+    languagePairErrorMessage,
+    noAudioMessage,
+    statusTitleFor,
+  } from "./ui-copy";
 
   const ACTIVE_AUDIO_THRESHOLD = 2;
   const NO_AUDIO_TIMEOUT_MS = 4500;
@@ -80,7 +87,7 @@
   $: visibleStatusTitle = statusTitleFor(visibleStatus);
   $: visibleStatusMessage =
     visibleStatus === "no-audio"
-      ? noAudioMessage()
+      ? noAudioMessage(audioCaptureMode)
       : statusMessage;
   $: displayedSessionCostUsd =
     captureActive && sessionStartedAt
@@ -124,30 +131,6 @@
 
   function setStatusMessage(message: string): void {
     statusMessage = message;
-  }
-
-  function statusTitleFor(status: LiveStatusKind): string {
-    if (status === "checking") return "Checking connection";
-    if (status === "connecting") return "Connecting";
-    if (status === "listening") return "Listening";
-    if (status === "no-audio") return "No audio detected";
-    if (status === "reconnecting") return "Reconnecting";
-    if (status === "error") return "Needs attention";
-    if (status === "stopped") return "Stopped";
-    if (status === "unsupported") return "Browser unsupported";
-    return "Ready";
-  }
-
-  function noAudioMessage(): string {
-    if (audioCaptureMode === "microphone") {
-      return "The session is live, but the selected microphone is not picking up sound.";
-    }
-
-    return "The session is live, but no shared tab or desktop audio is coming through.";
-  }
-
-  function languagePairErrorMessage(): string {
-    return "Input and output languages must be different.";
   }
 
   function handleRealtimeState(state: string): void {
@@ -216,29 +199,6 @@
     }
 
     return transcriptionRate + translationRate;
-  }
-
-  function formatUsd(value: number | null): string {
-    if (value === null) return "--";
-
-    if (value > 0 && value < 0.01) {
-      return "< $0.01";
-    }
-
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(value);
-  }
-
-  function formatDuration(totalSeconds: number): string {
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-
-    if (minutes === 0) return `${seconds}s`;
-    return `${minutes}m ${seconds.toString().padStart(2, "0")}s`;
   }
 
   function updateMeter(levelPercent: number): void {
