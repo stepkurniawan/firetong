@@ -10,6 +10,7 @@ export type RealtimeEvent = {
 
 export type RealtimeEventState = {
   transcriptionItems: Map<string, string>;
+  inputTranscriptEnabled: boolean;
   sourceFromTranscription: boolean;
 };
 
@@ -27,9 +28,10 @@ type TranslationEventCallbacks = {
   onTranslationDelta(delta: string): void;
 };
 
-export function createRealtimeEventState(): RealtimeEventState {
+export function createRealtimeEventState(inputTranscriptEnabled = true): RealtimeEventState {
   return {
     transcriptionItems: new Map<string, string>(),
+    inputTranscriptEnabled,
     sourceFromTranscription: false,
   };
 }
@@ -70,7 +72,11 @@ export function applyRealtimeTranslationEvent(
   state: RealtimeEventState,
   callbacks: TranslationEventCallbacks,
 ): void {
-  if (event.type === "session.input_transcript.delta" && !state.sourceFromTranscription) {
+  if (
+    event.type === "session.input_transcript.delta" &&
+    state.inputTranscriptEnabled &&
+    !state.sourceFromTranscription
+  ) {
     callbacks.onSourceDelta(event.delta || "");
   }
 

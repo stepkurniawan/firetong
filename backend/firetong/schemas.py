@@ -22,7 +22,7 @@ class RealtimeTokenResponse(BaseModel):
 
 class TranscriptSessionSaveRequest(BaseModel):
     source_text: str = ""
-    translated_text: str = ""
+    translated_text: str
     input_language: str
     output_language: str
     started_at: str | None = None
@@ -46,7 +46,7 @@ class TranscriptSessionCost(BaseModel):
 
 class TranscriptSessionSaveResponse(BaseModel):
     directory: str
-    input_path: str
+    input_path: str | None = None
     output_path: str
     metadata_path: str
     cost: TranscriptSessionCost

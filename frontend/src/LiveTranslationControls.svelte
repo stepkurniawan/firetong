@@ -12,6 +12,7 @@
   export let languagePairValid = true;
   export let microphoneCaptureSupported = true;
   export let meterLevel = 0;
+  export let inputTranscriptEnabled = false;
   export let inputLanguage: RealtimeLanguage = "id";
   export let outputLanguage: RealtimeLanguage = "en";
   export let realtimeLanguageOptions: RealtimeLanguageOption[] = [];
@@ -87,6 +88,14 @@
     </div>
   </div>
   <div class="action-group" aria-label="Capture actions">
+    <label class="input-transcript-toggle">
+      <input
+        type="checkbox"
+        bind:checked={inputTranscriptEnabled}
+        disabled={captureActive || capturePending}
+      />
+      <span>Input transcript</span>
+    </label>
     {#if audioCaptureMode === "microphone"}
       <button
         type="button"

@@ -78,6 +78,7 @@ def test_browser_app_uses_realtime_translation_only():
 def test_live_capture_wires_both_transcription_and_translation_sessions():
     app_svelte, realtime_ts, _, _ = read_frontend_source()
 
+    assert "options.inputTranscriptEnabled" in realtime_ts
     assert "this.startRealtimeTranscription(audioTracks, options.inputLanguage)" in realtime_ts
     assert "this.startRealtimeTranslation(audioTracks, options.outputLanguage)" in realtime_ts
     assert '"/api/realtime/token"' in realtime_ts
@@ -111,11 +112,15 @@ def test_browser_app_omits_transcript_export_for_now():
 
 def test_browser_app_autosaves_transcript_sessions():
     app_svelte, _, _, _ = read_frontend_source()
+    transcript_sessions_ts = (SRC_DIR / "transcript-sessions.ts").read_text()
 
     assert "saveTranscriptSession" in app_svelte
-    assert 'fetch("/api/transcript-sessions"' in app_svelte
-    assert "source_text" in app_svelte
-    assert "translated_text" in app_svelte
+    assert 'fetch("/api/transcript-sessions"' in transcript_sessions_ts
+    assert "inputTranscriptEnabled = false" in app_svelte
+    assert "bind:inputTranscriptEnabled" in app_svelte
+    assert 'sourceText: inputTranscriptEnabledForSession ? sessionSourceTranscript : ""' in app_svelte
+    assert "source_text" in transcript_sessions_ts
+    assert "translated_text" in transcript_sessions_ts
 
 
 def test_browser_app_omits_runtime_metrics_for_now():
@@ -143,6 +148,9 @@ def test_transcript_panels_keep_fixed_height_and_scroll_internally():
 
     assert "height: clamp(430px, 58vh, 680px);" in styles_css
     assert "height: clamp(340px, 42vh, 480px);" in styles_css
+    assert "class:panels-output-only={!sourceTranscriptEnabled}" in app_svelte
+    assert "{#if sourceTranscriptEnabled}" in app_svelte
+    assert ".panels-output-only {\n  grid-template-columns: minmax(0, 1fr);" in styles_css
     assert ".transcript-surface {\n  min-height: 0;\n  overflow: auto;" in styles_css
     assert ".transcript-surface p {\n  max-width: 72ch;" in styles_css
     assert "font-size: 18px;" in styles_css

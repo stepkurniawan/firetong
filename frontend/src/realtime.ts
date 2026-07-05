@@ -27,6 +27,7 @@ const TRANSCRIPTION_COMMIT_IDLE_MS = 900;
 export type AudioCaptureMode = "desktop" | "microphone";
 
 export type AudioCaptureOptions = {
+  inputTranscriptEnabled: boolean;
   inputLanguage: RealtimeLanguage;
   outputLanguage: RealtimeLanguage;
   mode: AudioCaptureMode;
@@ -63,13 +64,19 @@ export class RealtimeCapture {
       throw new Error(this.noAudioTrackMessage(options.mode));
     }
 
+    this.eventState = createRealtimeEventState(options.inputTranscriptEnabled);
     this.callbacks.onResetTranscripts();
 
     try {
-      await Promise.all([
-        this.startRealtimeTranscription(audioTracks, options.inputLanguage),
+      const realtimeSessions = [
         this.startRealtimeTranslation(audioTracks, options.outputLanguage),
-      ]);
+      ];
+      if (options.inputTranscriptEnabled) {
+        realtimeSessions.unshift(
+          this.startRealtimeTranscription(audioTracks, options.inputLanguage),
+        );
+      }
+      await Promise.all(realtimeSessions);
       this.callbacks.onCapturingChange(true);
     } catch (error) {
       this.cleanup();

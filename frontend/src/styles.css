@@ -144,6 +144,7 @@ h2 {
 
 .brand p,
 .control-field span,
+.input-transcript-toggle,
 .meter-row,
 .footer,
 .status-message,
@@ -202,6 +203,25 @@ h2 {
 .action-group {
   flex: 0 0 auto;
   justify-content: flex-end;
+}
+
+.input-transcript-toggle {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  gap: 8px;
+  color: #17202a;
+  font-size: 14px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.input-transcript-toggle input {
+  width: 16px;
+  min-height: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0;
 }
 
 .control-field {
@@ -342,6 +362,10 @@ h2 {
   gap: 14px;
   height: clamp(430px, 58vh, 680px);
   min-height: 0;
+}
+
+.panels-output-only {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .panel {

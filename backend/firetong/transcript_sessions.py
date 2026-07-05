@@ -13,6 +13,10 @@ class EmptyTranscriptSessionError(ValueError):
     pass
 
 
+class MissingTranslatedTranscriptError(ValueError):
+    pass
+
+
 def available_transcript_session_prefix(save_dir: Path, timestamp: str) -> str:
     prefix = timestamp
     counter = 2
@@ -61,26 +65,36 @@ def build_cost_metadata(
     translation_model: str,
 ) -> dict:
     duration_seconds = session_duration_seconds(payload.started_at, payload.ended_at)
-    sessions = [
-        {
-            "name": "transcription",
-            "model": transcription_model,
-            "pricing_basis": "duration",
-            "duration_seconds": duration_seconds,
-            "rate_usd_per_minute": REALTIME_DURATION_RATES_USD_PER_MINUTE.get(
-                transcription_model
-            ),
-            "estimated_cost_usd": duration_cost_usd(transcription_model, duration_seconds),
-        },
+    sessions = []
+    if payload.source_text.strip():
+        sessions.append(
+            {
+                "name": "transcription",
+                "model": transcription_model,
+                "pricing_basis": "duration",
+                "duration_seconds": duration_seconds,
+                "rate_usd_per_minute": REALTIME_DURATION_RATES_USD_PER_MINUTE.get(
+                    transcription_model
+                ),
+                "estimated_cost_usd": duration_cost_usd(
+                    transcription_model, duration_seconds
+                ),
+            }
+        )
+    sessions.append(
         {
             "name": "translation",
             "model": translation_model,
             "pricing_basis": "duration",
             "duration_seconds": duration_seconds,
-            "rate_usd_per_minute": REALTIME_DURATION_RATES_USD_PER_MINUTE.get(translation_model),
-            "estimated_cost_usd": duration_cost_usd(translation_model, duration_seconds),
-        },
-    ]
+            "rate_usd_per_minute": REALTIME_DURATION_RATES_USD_PER_MINUTE.get(
+                translation_model
+            ),
+            "estimated_cost_usd": duration_cost_usd(
+                translation_model, duration_seconds
+            ),
+        }
+    )
     session_costs = [session["estimated_cost_usd"] for session in sessions]
     total_cost = (
         round(sum(session_costs), 6)
@@ -107,18 +121,21 @@ def save_transcript_session_files(
     translated_text = payload.translated_text.strip()
     if not source_text and not translated_text:
         raise EmptyTranscriptSessionError
+    if not translated_text:
+        raise MissingTranslatedTranscriptError
 
     timestamp = datetime.now(UTC).strftime("%Y-%m-%d-%H-%M")
     session_prefix = available_transcript_session_prefix(save_dir, timestamp)
     input_dir = save_dir / "input"
     output_dir = save_dir / "output"
-    input_path = input_dir / f"{session_prefix}-{input_language}.txt"
+    input_path = input_dir / f"{session_prefix}-{input_language}.txt" if source_text else None
     output_path = output_dir / f"{session_prefix}-{output_language}.txt"
     metadata_path = save_dir / f"{session_prefix}-metadata.json"
 
-    input_dir.mkdir(parents=True, exist_ok=True)
+    if input_path:
+        input_dir.mkdir(parents=True, exist_ok=True)
+        input_path.write_text(source_text + "\n", encoding="utf-8")
     output_dir.mkdir(parents=True, exist_ok=True)
-    input_path.write_text(source_text + "\n", encoding="utf-8")
     output_path.write_text(translated_text + "\n", encoding="utf-8")
     cost = build_cost_metadata(
         payload,
@@ -135,7 +152,7 @@ def save_transcript_session_files(
                 "output_language_name": TRANSCRIPT_FILE_LANGUAGE_NAMES[output_language],
                 "started_at": payload.started_at,
                 "ended_at": payload.ended_at,
-                "input_path": str(input_path),
+                "input_path": str(input_path) if input_path else None,
                 "output_path": str(output_path),
                 "cost": cost,
             },
@@ -147,7 +164,7 @@ def save_transcript_session_files(
 
     return TranscriptSessionSaveResponse(
         directory=str(save_dir),
-        input_path=str(input_path),
+        input_path=str(input_path) if input_path else None,
         output_path=str(output_path),
         metadata_path=str(metadata_path),
         cost=cost,

@@ -124,6 +124,31 @@ test("translation source deltas are ignored after transcription owns source text
   assert.deepEqual(log.translations, ["English text"]);
 });
 
+test("translation source deltas are ignored when input transcript is disabled", () => {
+  const state = createRealtimeEventState(false);
+  const log = createCallbackLog();
+
+  applyRealtimeTranslationEvent(
+    {
+      type: "session.input_transcript.delta",
+      delta: "source text",
+    },
+    state,
+    log.callbacks,
+  );
+  applyRealtimeTranslationEvent(
+    {
+      type: "session.output_transcript.delta",
+      delta: "translated text",
+    },
+    state,
+    log.callbacks,
+  );
+
+  assert.deepEqual(log.source, []);
+  assert.deepEqual(log.translations, ["translated text"]);
+});
+
 test("realtime event errors report state and useful fallback messages", () => {
   const state = createRealtimeEventState();
   const log = createCallbackLog();

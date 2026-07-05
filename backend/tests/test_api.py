@@ -320,6 +320,71 @@ def test_transcript_session_route_saves_input_output_files(tmp_path):
     app.dependency_overrides.clear()
 
 
+def test_transcript_session_route_saves_output_without_input_file(tmp_path):
+    app.dependency_overrides[get_settings] = override_settings(transcript_save_dir=tmp_path)
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/transcript-sessions",
+        json={
+            "source_text": "",
+            "translated_text": "Good morning",
+            "input_language": "id",
+            "output_language": "en",
+            "started_at": "2026-07-04T07:00:00.000Z",
+            "ended_at": "2026-07-04T07:05:00.000Z",
+        },
+    )
+
+    assert response.status_code == 200
+    response_data = response.json()
+    output_file = next(path for path in (tmp_path / "output").iterdir())
+    metadata_file = next(
+        path for path in tmp_path.iterdir() if path.name.endswith("-metadata.json")
+    )
+
+    assert not (tmp_path / "input").exists()
+    assert output_file.read_text() == "Good morning\n"
+    assert response_data["input_path"] is None
+    assert response_data["output_path"] == str(output_file)
+
+    metadata = json.loads(metadata_file.read_text())
+    assert metadata["input_path"] is None
+    assert metadata["output_path"] == str(output_file)
+    assert metadata["cost"]["estimated_total_usd"] == 0.17
+    assert metadata["cost"]["sessions"] == [
+        {
+            "name": "translation",
+            "model": "gpt-realtime-translate",
+            "pricing_basis": "duration",
+            "duration_seconds": 300.0,
+            "rate_usd_per_minute": 0.034,
+            "estimated_cost_usd": 0.17,
+        }
+    ]
+    app.dependency_overrides.clear()
+
+
+def test_transcript_session_route_rejects_source_without_output(tmp_path):
+    app.dependency_overrides[get_settings] = override_settings(transcript_save_dir=tmp_path)
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/transcript-sessions",
+        json={
+            "source_text": "Selamat pagi",
+            "translated_text": " ",
+            "input_language": "id",
+            "output_language": "en",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "translated_text is required."}
+    assert list(tmp_path.iterdir()) == []
+    app.dependency_overrides.clear()
+
+
 def test_transcript_session_route_rejects_same_input_and_output_language(tmp_path):
     app.dependency_overrides[get_settings] = override_settings(transcript_save_dir=tmp_path)
     client = TestClient(app)

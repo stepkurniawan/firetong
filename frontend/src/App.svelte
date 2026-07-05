@@ -17,6 +17,10 @@
   import { RealtimeCapture, type AudioCaptureMode } from "./realtime";
   import TranscriptPanels from "./TranscriptPanels.svelte";
   import {
+    saveTranscriptSession,
+    type TranscriptSessionCost,
+  } from "./transcript-sessions";
+  import {
     formatDuration,
     formatUsd,
     languagePairErrorMessage,
@@ -26,24 +30,6 @@
 
   const ACTIVE_AUDIO_THRESHOLD = 2;
   const NO_AUDIO_TIMEOUT_MS = 4500;
-  type TranscriptSessionCost = {
-    currency: string;
-    estimated_total_usd: number | null;
-    sessions: Array<{
-      name: string;
-      model: string;
-      pricing_basis: string;
-      duration_seconds: number | null;
-      rate_usd_per_minute: number | null;
-      estimated_cost_usd: number | null;
-    }>;
-  };
-
-  type TranscriptSessionSaveResponse = {
-    directory?: string;
-    cost?: TranscriptSessionCost;
-  };
-
   let config: AppConfig = { ...DEFAULT_CONFIG };
   let realtimeLanguageOptions: RealtimeLanguageOption[] = [
     ...DEFAULT_CONFIG.realtime_language_options,
@@ -74,6 +60,7 @@
   let sessionStartedAt: string | null = null;
   let elapsedSessionSeconds = 0;
   let lastSavedSessionCost: TranscriptSessionCost | null = null;
+  let inputTranscriptEnabled = false;
 
   $: if (inputLanguage === outputLanguage && !captureActive) {
     outputLanguage = firstDifferentRealtimeLanguage(inputLanguage, realtimeLanguageOptions);
@@ -189,10 +176,11 @@
   }
 
   function realtimeSessionRateUsdPerMinute(): number | null {
-    const transcriptionRate =
-      config.realtime_duration_rates_usd_per_minute[config.transcription_model];
     const translationRate =
       config.realtime_duration_rates_usd_per_minute[config.realtime_translation_model];
+    const transcriptionRate = inputTranscriptEnabled
+      ? config.realtime_duration_rates_usd_per_minute[config.transcription_model]
+      : 0;
 
     if (typeof transcriptionRate !== "number" || typeof translationRate !== "number") {
       return null;
@@ -338,6 +326,7 @@
     capture = buildCapture();
     try {
       await capture.start({
+        inputTranscriptEnabled,
         inputLanguage,
         mode: audioCaptureMode,
         microphoneDeviceId: selectedAudioInputId,
@@ -356,46 +345,12 @@
     }
   }
 
-  async function saveTranscriptSession(
-    sourceText: string,
-    translatedText: string,
-    sessionInputLanguage: RealtimeLanguage,
-    sessionOutputLanguage: RealtimeLanguage,
-    startedAt: string | null,
-    endedAt: string,
-  ): Promise<void> {
-    if (!sourceText.trim() && !translatedText.trim()) return;
-
-    const response = await fetch("/api/transcript-sessions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        source_text: sourceText,
-        translated_text: translatedText,
-        input_language: sessionInputLanguage,
-        output_language: sessionOutputLanguage,
-        started_at: startedAt,
-        ended_at: endedAt,
-      }),
-    });
-
-    if (!response.ok) throw new Error(await response.text());
-
-    const data = (await response.json()) as TranscriptSessionSaveResponse;
-    lastSavedSessionCost = data.cost ?? null;
-    setStatus(
-      "stopped",
-      `Capture stopped. Session transcripts saved to ${data.directory || "the save folder"}.`,
-    );
-  }
-
   async function stopCapture(): Promise<void> {
     const sessionSourceTranscript = sourceTranscript;
     const sessionTranslatedTranscript = translatedTranscript;
     const sessionInputLanguage = inputLanguage;
     const sessionOutputLanguage = outputLanguage;
+    const inputTranscriptEnabledForSession = inputTranscriptEnabled;
     const startedAt = sessionStartedAt;
     const endedAt = new Date().toISOString();
 
@@ -405,13 +360,23 @@
     elapsedSessionSeconds = 0;
 
     try {
-      await saveTranscriptSession(
-        sessionSourceTranscript,
-        sessionTranslatedTranscript,
-        sessionInputLanguage,
-        sessionOutputLanguage,
+      const data = await saveTranscriptSession({
+        sourceText: inputTranscriptEnabledForSession ? sessionSourceTranscript : "",
+        translatedText: sessionTranslatedTranscript,
+        inputLanguage: sessionInputLanguage,
+        outputLanguage: sessionOutputLanguage,
         startedAt,
         endedAt,
+      });
+      if (!data) {
+        setStatus("stopped", "Capture stopped. No transcript text was available to save.");
+        return;
+      }
+
+      lastSavedSessionCost = data?.cost ?? null;
+      setStatus(
+        "stopped",
+        `Capture stopped. Session transcripts saved to ${data.directory || "the save folder"}.`,
       );
     } catch (error) {
       setStatus(
@@ -430,10 +395,9 @@
     }
 
     testRunning = true;
-    setStatus("checking", "Checking realtime transcription and translation endpoints.");
+    setStatus("checking", "Checking realtime translation endpoint.");
     try {
-      const [transcriptionResponse, translationResponse] = await Promise.all([
-        fetch(buildRealtimeLanguageUrl("/api/realtime/token", "input_language", inputLanguage)),
+      const endpointChecks = [
         fetch(
           buildRealtimeLanguageUrl(
             "/api/realtime/translation-token",
@@ -441,12 +405,24 @@
             outputLanguage,
           ),
         ),
-      ]);
+      ];
+      if (inputTranscriptEnabled) {
+        endpointChecks.unshift(
+          fetch(buildRealtimeLanguageUrl("/api/realtime/token", "input_language", inputLanguage)),
+        );
+      }
 
-      if (transcriptionResponse.ok && translationResponse.ok) {
-        setStatus("ready", "Realtime transcription and translation test passed.");
+      const responses = await Promise.all(endpointChecks);
+      const failedResponse = responses.find((response) => !response.ok);
+
+      if (!failedResponse) {
+        setStatus(
+          "ready",
+          inputTranscriptEnabled
+            ? "Realtime transcription and translation test passed."
+            : "Realtime translation test passed.",
+        );
       } else {
-        const failedResponse = transcriptionResponse.ok ? translationResponse : transcriptionResponse;
         setStatus("error", `Realtime transcription/translation test failed: ${await failedResponse.text()}`);
       }
     } catch (error) {
@@ -489,6 +465,7 @@
   <section class="live-console" aria-label="Live translation setup">
     <LiveTranslationControls
       bind:audioCaptureMode
+      bind:inputTranscriptEnabled
       bind:inputLanguage
       bind:outputLanguage
       bind:selectedAudioInputId
@@ -519,6 +496,7 @@
   <TranscriptPanels
     bind:sourceTextarea
     bind:sourceTranscript
+    sourceTranscriptEnabled={inputTranscriptEnabled}
     sourceLanguageLabel={inputLanguageLabel}
     bind:translatedTextarea
     bind:translatedTranscript
@@ -539,8 +517,8 @@
         next sermon.
       </p>
       <p>
-        Audio is streamed to an AI provider. Transcripts may be stored and used
-        to improve FireTong.
+        Audio is streamed to an AI provider. Translated output is saved
+        automatically; source-language transcripts are saved only when enabled.
       </p>
     </div>
     <nav aria-label="Footer links">

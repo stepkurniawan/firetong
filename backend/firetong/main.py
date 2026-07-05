@@ -19,6 +19,7 @@ from backend.firetong.schemas import (
 from backend.firetong.settings import Settings, get_settings
 from backend.firetong.transcript_sessions import (
     EmptyTranscriptSessionError,
+    MissingTranslatedTranscriptError,
     save_transcript_session_files,
 )
 
@@ -194,6 +195,8 @@ def save_transcript_session(
         )
     except EmptyTranscriptSessionError as exc:
         raise HTTPException(422, detail="At least one transcript field is required.") from exc
+    except MissingTranslatedTranscriptError as exc:
+        raise HTTPException(422, detail="translated_text is required.") from exc
     except OSError as exc:
         raise HTTPException(500, detail=f"Could not save transcript session: {exc}") from exc
 
