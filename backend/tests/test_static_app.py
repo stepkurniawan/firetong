@@ -138,6 +138,17 @@ def test_browser_app_streams_translated_text():
     assert ".panels" in styles_css
 
 
+def test_transcript_panels_keep_fixed_height_and_scroll_internally():
+    app_svelte, _, _, styles_css = read_frontend_source()
+
+    assert "height: clamp(430px, 58vh, 680px);" in styles_css
+    assert "height: clamp(340px, 42vh, 480px);" in styles_css
+    assert ".transcript-surface {\n  min-height: 0;\n  overflow: auto;" in styles_css
+    assert ".transcript-surface p {\n  max-width: 72ch;" in styles_css
+    assert "font-size: 18px;" in styles_css
+    assert "translatedTextarea.scrollTop = translatedTextarea.scrollHeight" in app_svelte
+
+
 def test_browser_app_commits_transcription_audio_buffers():
     _, realtime_ts, _, _ = read_frontend_source()
 
