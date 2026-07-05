@@ -2,18 +2,11 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
+from backend.firetong.runtime_config import (
+    REALTIME_DURATION_RATES_USD_PER_MINUTE,
+    TRANSCRIPT_FILE_LANGUAGE_NAMES,
+)
 from backend.firetong.schemas import TranscriptSessionSaveRequest, TranscriptSessionSaveResponse
-
-TRANSCRIPT_FILE_LANGUAGE_NAMES = {
-    "id": "indonesian",
-    "en": "english",
-    "de": "german",
-}
-
-REALTIME_DURATION_RATES_USD_PER_MINUTE = {
-    "gpt-realtime-whisper": 0.017,
-    "gpt-realtime-translate": 0.034,
-}
 
 
 class EmptyTranscriptSessionError(ValueError):
@@ -127,6 +120,11 @@ def save_transcript_session_files(
     output_dir.mkdir(parents=True, exist_ok=True)
     input_path.write_text(source_text + "\n", encoding="utf-8")
     output_path.write_text(translated_text + "\n", encoding="utf-8")
+    cost = build_cost_metadata(
+        payload,
+        transcription_model,
+        translation_model,
+    )
     metadata_path.write_text(
         json.dumps(
             {
@@ -139,11 +137,7 @@ def save_transcript_session_files(
                 "ended_at": payload.ended_at,
                 "input_path": str(input_path),
                 "output_path": str(output_path),
-                "cost": build_cost_metadata(
-                    payload,
-                    transcription_model,
-                    translation_model,
-                ),
+                "cost": cost,
             },
             indent=2,
         )
@@ -156,4 +150,5 @@ def save_transcript_session_files(
         input_path=str(input_path),
         output_path=str(output_path),
         metadata_path=str(metadata_path),
+        cost=cost,
     )

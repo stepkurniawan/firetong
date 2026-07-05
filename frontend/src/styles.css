@@ -410,6 +410,41 @@ h2 {
   font-size: 14px;
 }
 
+.session-cost {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  flex: 0 1 360px;
+  min-width: 280px;
+  gap: 14px;
+  border: 1px solid #cfd9e5;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 10px 12px;
+}
+
+.session-cost strong {
+  color: #17202a;
+  font-size: 22px;
+  font-weight: 780;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.session-cost-label {
+  color: #17202a;
+  font-size: 13px;
+  font-weight: 760;
+  line-height: 1.2;
+}
+
+.session-cost-note {
+  margin-top: 3px;
+  color: #5f6b7a;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .footer-copy {
   display: grid;
   max-width: 620px;
@@ -478,6 +513,10 @@ h2 {
     flex-direction: column;
   }
 
+  .session-cost {
+    width: 100%;
+  }
+
   .status-meta,
   .footer nav {
     justify-content: flex-start;
@@ -509,6 +548,12 @@ h2 {
 
   .panel {
     min-height: 360px;
+  }
+
+  .session-cost {
+    grid-template-columns: 1fr;
+    min-width: 0;
+    gap: 8px;
   }
 
   .transcript-surface p {

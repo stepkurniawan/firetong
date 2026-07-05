@@ -4,17 +4,24 @@ from pathlib import Path
 from pydantic import AnyHttpUrl
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-SUPPORTED_REALTIME_LANGUAGES = ("id", "en", "de")
+from backend.firetong.runtime_config import (
+    DEFAULT_OPENAI_BASE_URL,
+    DEFAULT_REALTIME_INPUT_LANGUAGE,
+    DEFAULT_REALTIME_TRANSCRIPTION_DELAY,
+    DEFAULT_REALTIME_TRANSLATION_LANGUAGE,
+    DEFAULT_REALTIME_TRANSLATION_MODEL,
+    DEFAULT_TRANSCRIPTION_MODEL,
+)
 
 
 class Settings(BaseSettings):
-    openai_base_url: AnyHttpUrl = "https://api.openai.com/v1"
+    openai_base_url: AnyHttpUrl = DEFAULT_OPENAI_BASE_URL
     openai_api_key: str | None = None
-    transcription_model: str = "gpt-realtime-whisper"
-    realtime_input_language: str = "id"
-    realtime_translation_model: str = "gpt-realtime-translate"
-    realtime_translation_language: str = "en"
-    realtime_transcription_delay: str = "low"
+    transcription_model: str = DEFAULT_TRANSCRIPTION_MODEL
+    realtime_input_language: str = DEFAULT_REALTIME_INPUT_LANGUAGE
+    realtime_translation_model: str = DEFAULT_REALTIME_TRANSLATION_MODEL
+    realtime_translation_language: str = DEFAULT_REALTIME_TRANSLATION_LANGUAGE
+    realtime_transcription_delay: str = DEFAULT_REALTIME_TRANSCRIPTION_DELAY
     transcript_save_dir: Path = Path("saved-sessions")
 
     model_config = SettingsConfigDict(

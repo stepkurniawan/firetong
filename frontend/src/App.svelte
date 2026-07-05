@@ -10,6 +10,7 @@
     realtimeLanguageLabel,
     type AppConfig,
     type RealtimeLanguage,
+    type RealtimeLanguageOption,
   } from "./app-core";
   import LiveStatus, { type LiveStatusKind } from "./LiveStatus.svelte";
   import LiveTranslationControls from "./LiveTranslationControls.svelte";
@@ -18,8 +19,28 @@
 
   const ACTIVE_AUDIO_THRESHOLD = 2;
   const NO_AUDIO_TIMEOUT_MS = 4500;
+  type TranscriptSessionCost = {
+    currency: string;
+    estimated_total_usd: number | null;
+    sessions: Array<{
+      name: string;
+      model: string;
+      pricing_basis: string;
+      duration_seconds: number | null;
+      rate_usd_per_minute: number | null;
+      estimated_cost_usd: number | null;
+    }>;
+  };
+
+  type TranscriptSessionSaveResponse = {
+    directory?: string;
+    cost?: TranscriptSessionCost;
+  };
 
   let config: AppConfig = { ...DEFAULT_CONFIG };
+  let realtimeLanguageOptions: RealtimeLanguageOption[] = [
+    ...DEFAULT_CONFIG.realtime_language_options,
+  ];
   let capture: RealtimeCapture | null = null;
 
   let browserSupported = true;
@@ -44,12 +65,14 @@
   let lastAudioInputAt = Date.now();
   let noAudioDetected = false;
   let sessionStartedAt: string | null = null;
+  let elapsedSessionSeconds = 0;
+  let lastSavedSessionCost: TranscriptSessionCost | null = null;
 
   $: if (inputLanguage === outputLanguage && !captureActive) {
-    outputLanguage = firstDifferentRealtimeLanguage(inputLanguage);
+    outputLanguage = firstDifferentRealtimeLanguage(inputLanguage, realtimeLanguageOptions);
   }
-  $: inputLanguageLabel = realtimeLanguageLabel(inputLanguage);
-  $: outputLanguageLabel = realtimeLanguageLabel(outputLanguage);
+  $: inputLanguageLabel = realtimeLanguageLabel(inputLanguage, realtimeLanguageOptions);
+  $: outputLanguageLabel = realtimeLanguageLabel(outputLanguage, realtimeLanguageOptions);
   $: languagePairValid = hasDistinctRealtimeLanguages(inputLanguage, outputLanguage);
   $: capturePending = liveStatus === "connecting";
   $: visibleStatus =
@@ -59,6 +82,20 @@
     visibleStatus === "no-audio"
       ? noAudioMessage()
       : statusMessage;
+  $: displayedSessionCostUsd =
+    captureActive && sessionStartedAt
+      ? estimateSessionCostUsd(elapsedSessionSeconds)
+      : lastSavedSessionCost?.estimated_total_usd ?? null;
+  $: sessionCostTitle = captureActive ? "Current session estimate" : "Last session cost";
+  $: sessionCostValue = formatUsd(displayedSessionCostUsd);
+  $: sessionCostNote =
+    captureActive && sessionStartedAt
+      ? realtimeSessionRateUsdPerMinute() === null
+        ? "Current model rates are not configured."
+        : `${formatDuration(elapsedSessionSeconds)} at the current realtime rates.`
+      : lastSavedSessionCost?.estimated_total_usd !== null && lastSavedSessionCost
+        ? "Final estimate saved with the transcript metadata."
+        : "Start a session to see the estimated realtime cost here.";
 
   const supportUrl = "https://paypal.me/stepkurniawan";
   const feedbackEmail = "stepkurniawan.learn@gmail.com";
@@ -136,12 +173,72 @@
   }
 
   function updateNoAudioState(): void {
+    updateElapsedSessionSeconds();
+
     if (!captureActive || liveStatus !== "listening") {
       noAudioDetected = false;
       return;
     }
 
     noAudioDetected = Date.now() - lastAudioInputAt > NO_AUDIO_TIMEOUT_MS;
+  }
+
+  function updateElapsedSessionSeconds(): void {
+    if (!sessionStartedAt || !captureActive) {
+      elapsedSessionSeconds = 0;
+      return;
+    }
+
+    const startedAt = Date.parse(sessionStartedAt);
+    if (Number.isNaN(startedAt)) {
+      elapsedSessionSeconds = 0;
+      return;
+    }
+
+    elapsedSessionSeconds = Math.max(0, Math.round((Date.now() - startedAt) / 1000));
+  }
+
+  function estimateSessionCostUsd(durationSeconds: number): number | null {
+    const rate = realtimeSessionRateUsdPerMinute();
+    if (rate === null) return null;
+
+    return (durationSeconds / 60) * rate;
+  }
+
+  function realtimeSessionRateUsdPerMinute(): number | null {
+    const transcriptionRate =
+      config.realtime_duration_rates_usd_per_minute[config.transcription_model];
+    const translationRate =
+      config.realtime_duration_rates_usd_per_minute[config.realtime_translation_model];
+
+    if (typeof transcriptionRate !== "number" || typeof translationRate !== "number") {
+      return null;
+    }
+
+    return transcriptionRate + translationRate;
+  }
+
+  function formatUsd(value: number | null): string {
+    if (value === null) return "--";
+
+    if (value > 0 && value < 0.01) {
+      return "< $0.01";
+    }
+
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  }
+
+  function formatDuration(totalSeconds: number): string {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+
+    if (minutes === 0) return `${seconds}s`;
+    return `${minutes}m ${seconds.toString().padStart(2, "0")}s`;
   }
 
   function updateMeter(levelPercent: number): void {
@@ -202,6 +299,7 @@
       const response = await fetch("/api/config");
       if (response.ok) {
         config = (await response.json()) as AppConfig;
+        realtimeLanguageOptions = config.realtime_language_options;
         inputLanguage = config.realtime_input_language;
         outputLanguage = config.realtime_translation_language;
       }
@@ -275,6 +373,8 @@
     setStatus("connecting", "Requesting audio capture and connecting realtime sessions.");
     lastAudioInputAt = Date.now();
     noAudioDetected = false;
+    elapsedSessionSeconds = 0;
+    lastSavedSessionCost = null;
     capture = buildCapture();
     try {
       await capture.start({
@@ -284,11 +384,13 @@
         outputLanguage,
       });
       sessionStartedAt = new Date().toISOString();
+      updateElapsedSessionSeconds();
       void refreshAudioInputOptions();
     } catch (error) {
       captureActive = false;
       capture = null;
       sessionStartedAt = null;
+      elapsedSessionSeconds = 0;
       setStatus("error", error instanceof Error ? error.message : String(error));
       void refreshAudioInputOptions();
     }
@@ -321,7 +423,8 @@
 
     if (!response.ok) throw new Error(await response.text());
 
-    const data = (await response.json()) as { directory?: string };
+    const data = (await response.json()) as TranscriptSessionSaveResponse;
+    lastSavedSessionCost = data.cost ?? null;
     setStatus(
       "stopped",
       `Capture stopped. Session transcripts saved to ${data.directory || "the save folder"}.`,
@@ -339,6 +442,7 @@
     capture?.stop();
     capture = null;
     sessionStartedAt = null;
+    elapsedSessionSeconds = 0;
 
     try {
       await saveTranscriptSession(
@@ -436,6 +540,7 @@
       {languagePairValid}
       {meterLevel}
       {microphoneCaptureSupported}
+      {realtimeLanguageOptions}
       {refreshAudioInputOptions}
       {startCapture}
       {stopCapture}
@@ -461,6 +566,13 @@
   />
 
   <footer class="footer">
+    <section class="session-cost" aria-label="Session cost estimate" aria-live="polite">
+      <div>
+        <p class="session-cost-label">{sessionCostTitle}</p>
+        <p class="session-cost-note">{sessionCostNote}</p>
+      </div>
+      <strong>{sessionCostValue}</strong>
+    </section>
     <div class="footer-copy">
       <p>
         Support helps pay for realtime translation credit, like adding fuel for the

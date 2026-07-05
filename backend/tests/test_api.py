@@ -22,9 +22,19 @@ def test_config_reports_openai_model_defaults():
     assert response.status_code == 200
     assert response.json() == {
         "openai_base_url": "https://api.openai.com/v1",
+        "transcription_model": "gpt-realtime-whisper",
         "realtime_input_language": "id",
         "realtime_translation_model": "gpt-realtime-translate",
         "realtime_translation_language": "en",
+        "realtime_language_options": [
+            {"value": "id", "label": "Indonesian"},
+            {"value": "en", "label": "English"},
+            {"value": "de", "label": "German"},
+        ],
+        "realtime_duration_rates_usd_per_minute": {
+            "gpt-realtime-whisper": 0.017,
+            "gpt-realtime-translate": 0.034,
+        },
     }
     app.dependency_overrides.clear()
 
@@ -232,7 +242,8 @@ def test_transcript_session_route_saves_input_output_files(tmp_path):
     )
 
     assert response.status_code == 200
-    assert response.json()["directory"] == str(tmp_path)
+    response_data = response.json()
+    assert response_data["directory"] == str(tmp_path)
 
     input_dir = tmp_path / "input"
     output_dir = tmp_path / "output"
@@ -283,6 +294,28 @@ def test_transcript_session_route_saves_input_output_files(tmp_path):
                 },
             ],
         },
+    }
+    assert response_data["cost"] == {
+        "currency": "USD",
+        "estimated_total_usd": 0.255,
+        "sessions": [
+            {
+                "name": "transcription",
+                "model": "gpt-realtime-whisper",
+                "pricing_basis": "duration",
+                "duration_seconds": 300.0,
+                "rate_usd_per_minute": 0.017,
+                "estimated_cost_usd": 0.085,
+            },
+            {
+                "name": "translation",
+                "model": "gpt-realtime-translate",
+                "pricing_basis": "duration",
+                "duration_seconds": 300.0,
+                "rate_usd_per_minute": 0.034,
+                "estimated_cost_usd": 0.17,
+            },
+        ],
     }
     app.dependency_overrides.clear()
 

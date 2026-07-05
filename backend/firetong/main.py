@@ -5,13 +5,18 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
 from httpx import AsyncClient, HTTPError
 
+from backend.firetong.runtime_config import (
+    REALTIME_DURATION_RATES_USD_PER_MINUTE,
+    REALTIME_LANGUAGE_OPTIONS,
+    SUPPORTED_REALTIME_LANGUAGES,
+)
 from backend.firetong.schemas import (
     AppConfig,
     RealtimeTokenResponse,
     TranscriptSessionSaveRequest,
     TranscriptSessionSaveResponse,
 )
-from backend.firetong.settings import SUPPORTED_REALTIME_LANGUAGES, Settings, get_settings
+from backend.firetong.settings import Settings, get_settings
 from backend.firetong.transcript_sessions import (
     EmptyTranscriptSessionError,
     save_transcript_session_files,
@@ -45,9 +50,12 @@ def ensure_distinct_realtime_languages(input_language: str, output_language: str
 def read_config(settings: Settings = Depends(get_settings)) -> AppConfig:
     return AppConfig(
         openai_base_url=str(settings.openai_base_url).rstrip("/"),
+        transcription_model=settings.transcription_model,
         realtime_input_language=settings.realtime_input_language,
         realtime_translation_model=settings.realtime_translation_model,
         realtime_translation_language=settings.realtime_translation_language,
+        realtime_language_options=list(REALTIME_LANGUAGE_OPTIONS),
+        realtime_duration_rates_usd_per_minute=REALTIME_DURATION_RATES_USD_PER_MINUTE,
     )
 
 
