@@ -153,6 +153,7 @@ def test_transcript_panels_keep_fixed_height_and_scroll_internally():
     assert ".panels-output-only {\n  grid-template-columns: minmax(0, 1fr);" in styles_css
     assert ".transcript-surface {\n  min-height: 0;\n  overflow: auto;" in styles_css
     assert ".transcript-surface p {\n  max-width: 72ch;" in styles_css
+    assert ".panels-output-only .transcript-surface p {\n  max-width: 96ch;" in styles_css
     assert "font-size: 18px;" in styles_css
     assert "translatedTextarea.scrollTop = translatedTextarea.scrollHeight" in app_svelte
 

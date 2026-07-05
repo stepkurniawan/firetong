@@ -421,6 +421,10 @@ h2 {
   overflow-wrap: anywhere;
 }
 
+.panels-output-only .transcript-surface p {
+  max-width: 96ch;
+}
+
 .transcript-placeholder {
   color: #7a8695;
 }
