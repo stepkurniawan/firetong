@@ -181,6 +181,8 @@ def save_transcript_session(
             settings.transcript_save_dir,
             input_language,
             output_language,
+            settings.transcription_model,
+            settings.realtime_translation_model,
         )
     except EmptyTranscriptSessionError as exc:
         raise HTTPException(422, detail="At least one transcript field is required.") from exc

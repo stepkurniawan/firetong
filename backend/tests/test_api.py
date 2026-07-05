@@ -261,6 +261,28 @@ def test_transcript_session_route_saves_input_output_files(tmp_path):
         "ended_at": "2026-07-04T07:05:00.000Z",
         "input_path": str(input_file),
         "output_path": str(output_file),
+        "cost": {
+            "currency": "USD",
+            "estimated_total_usd": 0.255,
+            "sessions": [
+                {
+                    "name": "transcription",
+                    "model": "gpt-realtime-whisper",
+                    "pricing_basis": "duration",
+                    "duration_seconds": 300.0,
+                    "rate_usd_per_minute": 0.017,
+                    "estimated_cost_usd": 0.085,
+                },
+                {
+                    "name": "translation",
+                    "model": "gpt-realtime-translate",
+                    "pricing_basis": "duration",
+                    "duration_seconds": 300.0,
+                    "rate_usd_per_minute": 0.034,
+                    "estimated_cost_usd": 0.17,
+                },
+            ],
+        },
     }
     app.dependency_overrides.clear()
 

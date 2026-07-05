@@ -70,8 +70,9 @@ When a live session is stopped, FireTong writes timestamped text files under
 `input/2026-07-04-07-30-id.txt` and
 `output/2026-07-04-07-30-en.txt`, plus a matching
 `2026-07-04-07-30-metadata.json` file with the language codes, session
-times, and saved file paths. With Docker Compose, the container path is mounted
-to `FIRETONG_TRANSCRIPT_HOST_DIR`, which defaults to `./saved-sessions`.
+times, estimated USD cost, and saved file paths. With Docker Compose, the
+container path is mounted to `FIRETONG_TRANSCRIPT_HOST_DIR`, which defaults to
+`./saved-sessions`.
 
 ## Run on a NAS
 
