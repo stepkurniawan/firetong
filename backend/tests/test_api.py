@@ -400,9 +400,7 @@ def test_transcript_session_route_rejects_same_input_and_output_language(tmp_pat
     )
 
     assert response.status_code == 422
-    assert response.json() == {
-        "detail": "input_language and output_language must be different."
-    }
+    assert response.json() == {"detail": "input_language and output_language must be different."}
     assert list(tmp_path.iterdir()) == []
     app.dependency_overrides.clear()
 

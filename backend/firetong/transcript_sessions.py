@@ -76,9 +76,7 @@ def build_cost_metadata(
                 "rate_usd_per_minute": REALTIME_DURATION_RATES_USD_PER_MINUTE.get(
                     transcription_model
                 ),
-                "estimated_cost_usd": duration_cost_usd(
-                    transcription_model, duration_seconds
-                ),
+                "estimated_cost_usd": duration_cost_usd(transcription_model, duration_seconds),
             }
         )
     sessions.append(
@@ -87,12 +85,8 @@ def build_cost_metadata(
             "model": translation_model,
             "pricing_basis": "duration",
             "duration_seconds": duration_seconds,
-            "rate_usd_per_minute": REALTIME_DURATION_RATES_USD_PER_MINUTE.get(
-                translation_model
-            ),
-            "estimated_cost_usd": duration_cost_usd(
-                translation_model, duration_seconds
-            ),
+            "rate_usd_per_minute": REALTIME_DURATION_RATES_USD_PER_MINUTE.get(translation_model),
+            "estimated_cost_usd": duration_cost_usd(translation_model, duration_seconds),
         }
     )
     session_costs = [session["estimated_cost_usd"] for session in sessions]

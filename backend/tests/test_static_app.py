@@ -118,7 +118,9 @@ def test_browser_app_autosaves_transcript_sessions():
     assert 'fetch("/api/transcript-sessions"' in transcript_sessions_ts
     assert "inputTranscriptEnabled = false" in app_svelte
     assert "bind:inputTranscriptEnabled" in app_svelte
-    assert 'sourceText: inputTranscriptEnabledForSession ? sessionSourceTranscript : ""' in app_svelte
+    assert (
+        'sourceText: inputTranscriptEnabledForSession ? sessionSourceTranscript : ""' in app_svelte
+    )
     assert "source_text" in transcript_sessions_ts
     assert "translated_text" in transcript_sessions_ts
 

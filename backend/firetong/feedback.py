@@ -18,9 +18,7 @@ def send_feedback_email(
     user_agent: str | None,
 ) -> None:
     if not settings.feedback_smtp_host or not settings.feedback_email_from:
-        raise FeedbackEmailNotConfiguredError(
-            "Feedback email is not configured on the server."
-        )
+        raise FeedbackEmailNotConfiguredError("Feedback email is not configured on the server.")
 
     message = EmailMessage()
     message["Subject"] = "firetong bug"
