@@ -1,4 +1,6 @@
-from pydantic import BaseModel
+from typing import Any
+
+from pydantic import BaseModel, Field
 
 
 class RealtimeLanguageOption(BaseModel):
@@ -50,3 +52,18 @@ class TranscriptSessionSaveResponse(BaseModel):
     output_path: str
     metadata_path: str
     cost: TranscriptSessionCost
+
+
+class FeedbackReportRequest(BaseModel):
+    feedback: str
+    source_transcript: str = ""
+    translated_transcript: str = ""
+    input_language: str
+    input_language_label: str
+    output_language: str
+    output_language_label: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class FeedbackReportResponse(BaseModel):
+    ok: bool

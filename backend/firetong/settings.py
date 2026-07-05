@@ -23,6 +23,14 @@ class Settings(BaseSettings):
     realtime_translation_language: str = DEFAULT_REALTIME_TRANSLATION_LANGUAGE
     realtime_transcription_delay: str = DEFAULT_REALTIME_TRANSCRIPTION_DELAY
     transcript_save_dir: Path = Path("saved-sessions")
+    feedback_email_to: str = "stepkurniawan.learn@gmail.com"
+    feedback_email_from: str | None = None
+    feedback_smtp_host: str | None = None
+    feedback_smtp_port: int = 587
+    feedback_smtp_username: str | None = None
+    feedback_smtp_password: str | None = None
+    feedback_smtp_starttls: bool = True
+    feedback_smtp_ssl: bool = False
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -1,10 +1,12 @@
+import smtplib
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.staticfiles import StaticFiles
 from httpx import AsyncClient, HTTPError
 
+from backend.firetong.feedback import FeedbackEmailNotConfiguredError, send_feedback_email
 from backend.firetong.runtime_config import (
     REALTIME_DURATION_RATES_USD_PER_MINUTE,
     REALTIME_LANGUAGE_OPTIONS,
@@ -12,6 +14,8 @@ from backend.firetong.runtime_config import (
 )
 from backend.firetong.schemas import (
     AppConfig,
+    FeedbackReportRequest,
+    FeedbackReportResponse,
     RealtimeTokenResponse,
     TranscriptSessionSaveRequest,
     TranscriptSessionSaveResponse,
@@ -45,6 +49,13 @@ def ensure_distinct_realtime_languages(input_language: str, output_language: str
             422,
             detail="input_language and output_language must be different.",
         )
+
+
+def request_client_ip(request: Request) -> str | None:
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        return forwarded_for.split(",", 1)[0].strip()
+    return request.client.host if request.client else None
 
 
 @app.get("/api/config", response_model=AppConfig)
@@ -199,6 +210,30 @@ def save_transcript_session(
         raise HTTPException(422, detail="translated_text is required.") from exc
     except OSError as exc:
         raise HTTPException(500, detail=f"Could not save transcript session: {exc}") from exc
+
+
+@app.post("/api/feedback", response_model=FeedbackReportResponse)
+def send_feedback_report(
+    payload: FeedbackReportRequest,
+    request: Request,
+    settings: Settings = Depends(get_settings),
+) -> FeedbackReportResponse:
+    if not payload.feedback.strip():
+        raise HTTPException(422, detail="feedback is required.")
+
+    try:
+        send_feedback_email(
+            payload,
+            settings,
+            request_client_ip(request),
+            request.headers.get("user-agent"),
+        )
+    except FeedbackEmailNotConfiguredError as exc:
+        raise HTTPException(503, detail=str(exc)) from exc
+    except (OSError, smtplib.SMTPException) as exc:
+        raise HTTPException(502, detail=f"Could not send feedback email: {exc}") from exc
+
+    return FeedbackReportResponse(ok=True)
 
 
 static_dir = Path(__file__).parents[1] / "static"

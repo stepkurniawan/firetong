@@ -116,6 +116,13 @@ When capture stops, the browser sends the current source and translated text to
 the Python server for local autosave. Set `FIRETONG_TRANSCRIPT_SAVE_DIR` to
 choose a different save folder.
 
+Bug reports are sent by the Python server through SMTP. Set
+`FIRETONG_FEEDBACK_SMTP_HOST` and `FIRETONG_FEEDBACK_EMAIL_FROM`, plus
+`FIRETONG_FEEDBACK_SMTP_USERNAME` and `FIRETONG_FEEDBACK_SMTP_PASSWORD` when your
+mail provider requires authentication. Reports are sent to
+`FIRETONG_FEEDBACK_EMAIL_TO`, which defaults to `stepkurniawan.learn@gmail.com`,
+with subject `firetong bug`.
+
 FireTong checks for the browser APIs it needs on load: at least one browser audio
 capture path, `RTCPeerConnection`, and `AudioContext`.
 
@@ -145,6 +152,14 @@ Environment variables use the `FIRETONG_` prefix:
 - `FIRETONG_REALTIME_TRANSLATION_LANGUAGE` default: `en`
 - `FIRETONG_REALTIME_TRANSCRIPTION_DELAY` default: `low`
 - `FIRETONG_TRANSCRIPT_SAVE_DIR` default: `saved-sessions`
+- `FIRETONG_FEEDBACK_EMAIL_TO` default: `stepkurniawan.learn@gmail.com`
+- `FIRETONG_FEEDBACK_EMAIL_FROM` required for bug report email
+- `FIRETONG_FEEDBACK_SMTP_HOST` required for bug report email
+- `FIRETONG_FEEDBACK_SMTP_PORT` default: `587`
+- `FIRETONG_FEEDBACK_SMTP_USERNAME` optional SMTP login username
+- `FIRETONG_FEEDBACK_SMTP_PASSWORD` optional SMTP login password
+- `FIRETONG_FEEDBACK_SMTP_STARTTLS` default: `true`
+- `FIRETONG_FEEDBACK_SMTP_SSL` default: `false`
 
 Supported runtime language codes are `id`, `en`, and `de`.
 

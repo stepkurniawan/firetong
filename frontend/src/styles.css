@@ -46,7 +46,8 @@ button {
 }
 
 input,
-select {
+select,
+textarea {
   min-height: 40px;
   border: 1px solid #c8d1dc;
   border-radius: 6px;
@@ -57,7 +58,8 @@ select {
 }
 
 input:disabled,
-select:disabled {
+select:disabled,
+textarea:disabled {
   opacity: 0.6;
 }
 
@@ -65,10 +67,17 @@ button:focus-visible,
 .button-link:focus-visible,
 input:focus,
 select:focus,
+textarea:focus,
 .transcript-surface:focus {
   border-color: #1f6feb;
   box-shadow: 0 0 0 3px rgb(31 111 235 / 14%);
   outline: none;
+}
+
+textarea {
+  min-height: 140px;
+  padding: 10px 12px;
+  resize: vertical;
 }
 
 button:disabled {
@@ -494,6 +503,63 @@ h2 {
 
 .footer a {
   white-space: nowrap;
+}
+
+.feedback-dialog {
+  width: min(520px, calc(100vw - 32px));
+  border: 1px solid #d8e0ea;
+  border-radius: 8px;
+  padding: 0;
+  color: #17202a;
+  background: #ffffff;
+  box-shadow: 0 24px 70px rgb(23 32 42 / 18%);
+}
+
+.feedback-dialog::backdrop {
+  background: rgb(23 32 42 / 34%);
+}
+
+.feedback-form {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.feedback-header,
+.feedback-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.feedback-field {
+  display: grid;
+  gap: 6px;
+}
+
+.feedback-field span {
+  color: #17202a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.feedback-note,
+.feedback-error {
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.feedback-note {
+  color: #5f6b7a;
+}
+
+.feedback-error {
+  color: #b42318;
+}
+
+.icon-close {
+  min-width: auto;
 }
 
 @media (max-width: 860px) {

@@ -447,3 +447,80 @@ def test_transcript_session_route_rejects_empty_session(tmp_path):
     assert response.json() == {"detail": "At least one transcript field is required."}
     assert list(tmp_path.iterdir()) == []
     app.dependency_overrides.clear()
+
+
+def test_feedback_route_sends_report_email(monkeypatch):
+    calls = []
+
+    def fake_send_feedback_email(payload, settings, client_ip, user_agent):
+        calls.append(
+            {
+                "payload": payload,
+                "settings": settings,
+                "client_ip": client_ip,
+                "user_agent": user_agent,
+            }
+        )
+
+    monkeypatch.setattr("backend.firetong.main.send_feedback_email", fake_send_feedback_email)
+    app.dependency_overrides[get_settings] = override_settings(
+        feedback_email_from="reports@example.com",
+        feedback_smtp_host="smtp.example.com",
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/feedback",
+        headers={
+            "User-Agent": "Test Browser",
+            "X-Forwarded-For": "203.0.113.10, 10.0.0.2",
+        },
+        json={
+            "feedback": "Translation froze halfway through.",
+            "source_transcript": "Selamat pagi",
+            "translated_transcript": "Good morning",
+            "input_language": "id",
+            "input_language_label": "Indonesian",
+            "output_language": "en",
+            "output_language_label": "English",
+            "metadata": {"online": True},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    assert len(calls) == 1
+    call = calls[0]
+    assert call["payload"].feedback == "Translation froze halfway through."
+    assert call["payload"].source_transcript == "Selamat pagi"
+    assert call["payload"].translated_transcript == "Good morning"
+    assert call["payload"].metadata == {"online": True}
+    assert call["client_ip"] == "203.0.113.10"
+    assert call["user_agent"] == "Test Browser"
+    assert call["settings"].feedback_email_to == "stepkurniawan.learn@gmail.com"
+    app.dependency_overrides.clear()
+
+
+def test_feedback_route_rejects_blank_feedback(monkeypatch):
+    def fake_send_feedback_email(payload, settings, client_ip, user_agent):
+        raise AssertionError("blank feedback should not send email")
+
+    monkeypatch.setattr("backend.firetong.main.send_feedback_email", fake_send_feedback_email)
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/feedback",
+        json={
+            "feedback": " ",
+            "source_transcript": "",
+            "translated_transcript": "Good morning",
+            "input_language": "id",
+            "input_language_label": "Indonesian",
+            "output_language": "en",
+            "output_language_label": "English",
+            "metadata": {},
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "feedback is required."}

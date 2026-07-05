@@ -12,6 +12,7 @@
     type RealtimeLanguage,
     type RealtimeLanguageOption,
   } from "./app-core";
+  import { sendFeedbackReport } from "./feedback";
   import LiveStatus, { type LiveStatusKind } from "./LiveStatus.svelte";
   import LiveTranslationControls from "./LiveTranslationControls.svelte";
   import { RealtimeCapture, type AudioCaptureMode } from "./realtime";
@@ -61,6 +62,10 @@
   let elapsedSessionSeconds = 0;
   let lastSavedSessionCost: TranscriptSessionCost | null = null;
   let inputTranscriptEnabled = false;
+  let feedbackDialog: HTMLDialogElement | null = null;
+  let feedbackText = "";
+  let feedbackSubmitting = false;
+  let feedbackError = "";
 
   $: if (inputLanguage === outputLanguage && !captureActive) {
     outputLanguage = firstDifferentRealtimeLanguage(inputLanguage, realtimeLanguageOptions);
@@ -437,6 +442,51 @@
     }
   }
 
+  function openFeedbackDialog(): void {
+    feedbackError = "";
+    feedbackDialog?.showModal();
+  }
+
+  function closeFeedbackDialog(): void {
+    if (feedbackSubmitting) return;
+    feedbackDialog?.close();
+  }
+
+  async function submitFeedback(event: SubmitEvent): Promise<void> {
+    event.preventDefault();
+    if (!feedbackText.trim()) {
+      feedbackError = "Describe the bug or feedback before sending.";
+      return;
+    }
+
+    feedbackSubmitting = true;
+    feedbackError = "";
+    try {
+      await sendFeedbackReport({
+        feedback: feedbackText,
+        sourceTranscript,
+        translatedTranscript,
+        inputLanguage,
+        inputLanguageLabel,
+        outputLanguage,
+        outputLanguageLabel,
+        sessionStartedAt,
+        captureActive,
+        audioCaptureMode,
+        inputTranscriptEnabled,
+        selectedAudioInputId,
+        appConfig: config,
+      });
+      feedbackText = "";
+      feedbackDialog?.close();
+      setStatusMessage("Feedback report sent.");
+    } catch (error) {
+      feedbackError = error instanceof Error ? error.message : String(error);
+    } finally {
+      feedbackSubmitting = false;
+    }
+  }
+
 </script>
 
 <main class="app">
@@ -455,7 +505,9 @@
       >
         {testRunning ? "Checking..." : "Check connection"}
       </button>
-      <a class="button-link" href={`mailto:${feedbackEmail}`}>Send feedback</a>
+      <button type="button" class="secondary topbar-action" onclick={openFeedbackDialog}>
+        Report bug
+      </button>
       <a class="button-link" href={supportUrl} target="_blank" rel="noreferrer">
         Support FireTong
       </a>
@@ -502,6 +554,44 @@
     bind:translatedTranscript
     translatedLanguageLabel={outputLanguageLabel}
   />
+
+  <dialog class="feedback-dialog" aria-labelledby="feedback-title" bind:this={feedbackDialog}>
+    <form class="feedback-form" method="dialog" onsubmit={submitFeedback}>
+      <div class="feedback-header">
+        <div>
+          <p class="panel-kicker">Report bug</p>
+          <h2 id="feedback-title">Send feedback</h2>
+        </div>
+        <button type="button" class="secondary icon-close" onclick={closeFeedbackDialog}>
+          Close
+        </button>
+      </div>
+      <label class="feedback-field">
+        <span>What happened?</span>
+        <textarea
+          bind:value={feedbackText}
+          rows="6"
+          placeholder="Describe the feedback or problem."
+          disabled={feedbackSubmitting}
+        ></textarea>
+      </label>
+      <p class="feedback-note">
+        This sends the current transcripts, language settings, browser details, and session
+        metadata with your message.
+      </p>
+      {#if feedbackError}
+        <p class="feedback-error" role="alert">{feedbackError}</p>
+      {/if}
+      <div class="feedback-actions">
+        <button type="button" class="secondary" onclick={closeFeedbackDialog} disabled={feedbackSubmitting}>
+          Cancel
+        </button>
+        <button type="submit" class="primary-action" disabled={feedbackSubmitting}>
+          {feedbackSubmitting ? "Sending..." : "Send report"}
+        </button>
+      </div>
+    </form>
+  </dialog>
 
   <footer class="footer">
     <section class="session-cost" aria-label="Session cost estimate" aria-live="polite">
