@@ -146,6 +146,18 @@ def test_browser_app_streams_translated_text():
     assert ".panels" in styles_css
 
 
+def test_browser_app_logs_steady_state_realtime_latency():
+    app_svelte, realtime_ts, _, _ = read_frontend_source()
+
+    assert "translation_delta_gap" in realtime_ts
+    assert "longest_audio_present_without_translation_delta" in realtime_ts
+    assert "webrtc_stats" in realtime_ts
+    assert "translation_delta_ui_render_delay" in app_svelte
+    assert "start_to_translation_channel_open" not in realtime_ts
+    assert "first_audio_to_first_translation_delta" not in realtime_ts
+    assert "spoken_phrase_end_to_translation_settled" not in realtime_ts
+
+
 def test_transcript_panels_keep_fixed_height_and_scroll_internally():
     app_svelte, _, _, styles_css = read_frontend_source()
 

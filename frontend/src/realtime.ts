@@ -24,19 +24,18 @@ type CaptureCallbacks = {
 
 const TRANSCRIPTION_COMMIT_IDLE_MS = 600;
 const AUDIO_DETECTED_LEVEL = 0.03;
-const SPOKEN_PHRASE_SILENCE_MS = 700;
-const TRANSLATION_SETTLED_MS = 900;
+const WEBRTC_STATS_INTERVAL_MS = 5000;
+const AUDIO_WITHOUT_TRANSLATION_LOG_STEP_MS = 500;
 
-type RealtimeTimingState = {
-  startedAt: number;
-  firstAudioDetectedAt: number | null;
-  firstTranslationDeltaAt: number | null;
-  isSpeaking: boolean;
-  lastSpeechAt: number | null;
-  pendingPhraseEndedAt: number | null;
-  phraseEndedTimer: number | null;
-  translationSettledTimer: number | null;
-  phraseCount: number;
+type RealtimeMetricsState = {
+  lastTranslationDeltaAt: number | null;
+  audioPresent: boolean;
+  audioWithoutTranslationStartedAt: number | null;
+  longestAudioWithoutTranslationMs: number;
+  lastAudioWithoutTranslationLogMs: number;
+  webrtcStatsTimer: number | null;
+  lastOutboundBytesSent: number | null;
+  lastOutboundStatsAt: number | null;
 };
 
 export type AudioCaptureMode = "desktop" | "microphone";
@@ -64,7 +63,7 @@ export class RealtimeCapture {
   private transcriptionPeerConnected = false;
   private lastTranscriptionCommitBytesSent = 0;
   private eventState: RealtimeEventState = createRealtimeEventState();
-  private timing: RealtimeTimingState | null = null;
+  private metrics: RealtimeMetricsState | null = null;
 
   constructor(
     private readonly config: AppConfig,
@@ -72,7 +71,7 @@ export class RealtimeCapture {
   ) {}
 
   async start(options: AudioCaptureOptions): Promise<void> {
-    this.resetTiming();
+    this.resetMetrics();
     this.stream = await this.captureAudio(options);
 
     const audioTracks = this.stream.getAudioTracks();
@@ -243,125 +242,202 @@ export class RealtimeCapture {
 
   private handleRealtimeTranslationEvent(event: RealtimeEvent): void {
     if (event.type === "session.output_transcript.delta") {
-      this.recordTranslationDeltaTiming();
+      this.recordTranslationDeltaMetrics(event.delta || "");
     }
     applyRealtimeTranslationEvent(event, this.eventState, this.callbacks);
   }
 
-  private resetTiming(): void {
-    this.clearTimingTimers();
-    this.timing = {
-      startedAt: performance.now(),
-      firstAudioDetectedAt: null,
-      firstTranslationDeltaAt: null,
-      isSpeaking: false,
-      lastSpeechAt: null,
-      pendingPhraseEndedAt: null,
-      phraseEndedTimer: null,
-      translationSettledTimer: null,
-      phraseCount: 0,
+  private resetMetrics(): void {
+    this.clearMetricsTimers();
+    this.metrics = {
+      lastTranslationDeltaAt: null,
+      audioPresent: false,
+      audioWithoutTranslationStartedAt: null,
+      longestAudioWithoutTranslationMs: 0,
+      lastAudioWithoutTranslationLogMs: 0,
+      webrtcStatsTimer: null,
+      lastOutboundBytesSent: null,
+      lastOutboundStatsAt: null,
     };
   }
 
-  private clearTimingTimers(): void {
-    if (this.timing?.phraseEndedTimer) clearTimeout(this.timing.phraseEndedTimer);
-    if (this.timing?.translationSettledTimer) clearTimeout(this.timing.translationSettledTimer);
+  private clearMetricsTimers(): void {
+    if (this.metrics?.webrtcStatsTimer) clearInterval(this.metrics.webrtcStatsTimer);
   }
 
-  private logTiming(metric: string, durationMs: number, details: Record<string, unknown> = {}): void {
+  private logLatency(metric: string, details: Record<string, unknown> = {}): void {
     console.info("[firetong:latency]", {
       metric,
+      ...details,
+    });
+  }
+
+  private logDuration(
+    metric: string,
+    durationMs: number,
+    details: Record<string, unknown> = {},
+  ): void {
+    this.logLatency(metric, {
       duration_ms: Math.round(durationMs),
       ...details,
     });
   }
 
-  private recordTranslationChannelOpenTiming(): void {
-    if (!this.timing) return;
-    this.logTiming(
-      "start_to_translation_channel_open",
-      performance.now() - this.timing.startedAt,
-    );
-  }
-
-  private recordAudioLevelTiming(level: number): void {
-    if (!this.timing) return;
-
+  private recordAudioLevelMetrics(level: number): void {
+    if (!this.metrics) return;
     const now = performance.now();
-    const hasSpeech = level >= AUDIO_DETECTED_LEVEL;
+    const hasAudio = level >= AUDIO_DETECTED_LEVEL;
 
-    if (hasSpeech && this.timing.firstAudioDetectedAt === null) {
-      this.timing.firstAudioDetectedAt = now;
-      this.logTiming("start_to_first_audio_detected", now - this.timing.startedAt, {
+    if (!hasAudio) {
+      this.metrics.audioPresent = false;
+      this.metrics.audioWithoutTranslationStartedAt = null;
+      this.metrics.lastAudioWithoutTranslationLogMs = 0;
+      return;
+    }
+
+    this.metrics.audioPresent = true;
+    if (this.metrics.lastTranslationDeltaAt === null) {
+      this.metrics.audioWithoutTranslationStartedAt = null;
+      this.metrics.lastAudioWithoutTranslationLogMs = 0;
+      return;
+    }
+
+    if (this.metrics.audioWithoutTranslationStartedAt === null) {
+      this.metrics.audioWithoutTranslationStartedAt = now;
+      this.metrics.lastAudioWithoutTranslationLogMs = 0;
+      return;
+    }
+
+    const currentGapMs = now - this.metrics.audioWithoutTranslationStartedAt;
+    const shouldLogNewLongest =
+      currentGapMs > this.metrics.longestAudioWithoutTranslationMs &&
+      currentGapMs - this.metrics.lastAudioWithoutTranslationLogMs >=
+        AUDIO_WITHOUT_TRANSLATION_LOG_STEP_MS;
+
+    if (shouldLogNewLongest) {
+      this.metrics.longestAudioWithoutTranslationMs = currentGapMs;
+      this.metrics.lastAudioWithoutTranslationLogMs = currentGapMs;
+      this.logDuration("longest_audio_present_without_translation_delta", currentGapMs, {
         audio_level: Number(level.toFixed(3)),
       });
     }
-
-    if (hasSpeech) {
-      if (!this.timing.isSpeaking) {
-        this.timing.isSpeaking = true;
-        this.timing.phraseCount += 1;
-        this.timing.pendingPhraseEndedAt = null;
-        if (this.timing.translationSettledTimer) {
-          clearTimeout(this.timing.translationSettledTimer);
-          this.timing.translationSettledTimer = null;
-        }
-      }
-
-      this.timing.lastSpeechAt = now;
-      if (this.timing.phraseEndedTimer) {
-        clearTimeout(this.timing.phraseEndedTimer);
-        this.timing.phraseEndedTimer = null;
-      }
-      return;
-    }
-
-    if (!this.timing.isSpeaking || this.timing.phraseEndedTimer || this.timing.lastSpeechAt === null) {
-      return;
-    }
-
-    this.timing.phraseEndedTimer = window.setTimeout(() => {
-      if (!this.timing?.lastSpeechAt) return;
-
-      this.timing.isSpeaking = false;
-      this.timing.pendingPhraseEndedAt = this.timing.lastSpeechAt;
-      this.timing.phraseEndedTimer = null;
-      this.scheduleTranslationSettledTiming();
-    }, SPOKEN_PHRASE_SILENCE_MS);
   }
 
-  private recordTranslationDeltaTiming(): void {
-    if (!this.timing) return;
+  private recordTranslationDeltaMetrics(delta: string): void {
+    if (!this.metrics) return;
 
     const now = performance.now();
-    if (this.timing.firstTranslationDeltaAt === null) {
-      this.timing.firstTranslationDeltaAt = now;
-      if (this.timing.firstAudioDetectedAt !== null) {
-        this.logTiming(
-          "first_audio_to_first_translation_delta",
-          now - this.timing.firstAudioDetectedAt,
-        );
+    if (this.metrics.lastTranslationDeltaAt !== null) {
+      this.logDuration(
+        "translation_delta_gap",
+        now - this.metrics.lastTranslationDeltaAt,
+        { delta_length: delta.length },
+      );
+    }
+
+    if (this.metrics.audioWithoutTranslationStartedAt !== null) {
+      const gapMs = now - this.metrics.audioWithoutTranslationStartedAt;
+      if (gapMs > this.metrics.longestAudioWithoutTranslationMs) {
+        this.metrics.longestAudioWithoutTranslationMs = gapMs;
+        this.logDuration("longest_audio_present_without_translation_delta", gapMs, {
+          delta_length: delta.length,
+        });
       }
     }
 
-    this.scheduleTranslationSettledTiming();
+    this.metrics.lastTranslationDeltaAt = now;
+    this.metrics.audioWithoutTranslationStartedAt = this.metrics.audioPresent ? now : null;
+    this.metrics.lastAudioWithoutTranslationLogMs = 0;
   }
 
-  private scheduleTranslationSettledTiming(): void {
-    if (!this.timing?.pendingPhraseEndedAt) return;
+  private startWebRtcStatsLogging(): void {
+    if (!this.metrics || this.metrics.webrtcStatsTimer) return;
 
-    if (this.timing.translationSettledTimer) clearTimeout(this.timing.translationSettledTimer);
-    this.timing.translationSettledTimer = window.setTimeout(() => {
-      if (!this.timing?.pendingPhraseEndedAt) return;
+    this.metrics.webrtcStatsTimer = window.setInterval(() => {
+      void this.logWebRtcStats();
+    }, WEBRTC_STATS_INTERVAL_MS);
+    void this.logWebRtcStats();
+  }
 
-      this.logTiming(
-        "spoken_phrase_end_to_translation_settled",
-        performance.now() - this.timing.pendingPhraseEndedAt,
-        { phrase: this.timing.phraseCount },
-      );
-      this.timing.pendingPhraseEndedAt = null;
-      this.timing.translationSettledTimer = null;
-    }, TRANSLATION_SETTLED_MS);
+  private numericStat(stat: RTCStats & Record<string, unknown>, key: string): number | null {
+    const value = stat[key];
+    return typeof value === "number" && Number.isFinite(value) ? value : null;
+  }
+
+  private roundNullable(value: number | null, digits = 0): number | null {
+    if (value === null) return null;
+
+    const factor = 10 ** digits;
+    return Math.round(value * factor) / factor;
+  }
+
+  private async logWebRtcStats(): Promise<void> {
+    if (!this.peerConnection || !this.metrics) return;
+
+    const metrics = this.metrics;
+    const stats = await this.peerConnection.getStats();
+    if (this.metrics !== metrics) return;
+
+    const snapshot = {
+      rttMs: null as number | null,
+      jitterMs: null as number | null,
+      packetsLost: null as number | null,
+      outboundPacketsSent: null as number | null,
+      outboundAudioKbps: null as number | null,
+    };
+
+    stats.forEach((rawStat) => {
+      const stat = rawStat as RTCStats & Record<string, unknown>;
+      const kind = stat.kind || stat.mediaType;
+
+      if (stat.type === "candidate-pair" && (stat.selected || stat.nominated)) {
+        const rtt = this.numericStat(stat, "currentRoundTripTime");
+        if (rtt !== null) snapshot.rttMs = rtt * 1000;
+      }
+
+      if (
+        (stat.type === "remote-inbound-rtp" || stat.type === "inbound-rtp") &&
+        kind === "audio"
+      ) {
+        const rtt = this.numericStat(stat, "roundTripTime");
+        const jitter = this.numericStat(stat, "jitter");
+        const packetsLost = this.numericStat(stat, "packetsLost");
+
+        if (rtt !== null) snapshot.rttMs = rtt * 1000;
+        if (jitter !== null) snapshot.jitterMs = jitter * 1000;
+        if (packetsLost !== null) snapshot.packetsLost = packetsLost;
+      }
+
+      if (stat.type === "outbound-rtp" && kind === "audio") {
+        const bytesSent = this.numericStat(stat, "bytesSent");
+        const packetsSent = this.numericStat(stat, "packetsSent");
+
+        snapshot.outboundPacketsSent = packetsSent;
+        if (
+          bytesSent !== null &&
+          metrics.lastOutboundBytesSent !== null &&
+          metrics.lastOutboundStatsAt !== null &&
+          stat.timestamp > metrics.lastOutboundStatsAt
+        ) {
+          const elapsedSeconds = (stat.timestamp - metrics.lastOutboundStatsAt) / 1000;
+          snapshot.outboundAudioKbps =
+            ((bytesSent - metrics.lastOutboundBytesSent) * 8) /
+            elapsedSeconds /
+            1000;
+        }
+
+        metrics.lastOutboundBytesSent = bytesSent;
+        metrics.lastOutboundStatsAt = stat.timestamp;
+      }
+    });
+
+    this.logLatency("webrtc_stats", {
+      rtt_ms: this.roundNullable(snapshot.rttMs),
+      jitter_ms: this.roundNullable(snapshot.jitterMs),
+      packets_lost: snapshot.packetsLost,
+      outbound_audio_kbps: this.roundNullable(snapshot.outboundAudioKbps, 1),
+      outbound_packets_sent: snapshot.outboundPacketsSent,
+    });
   }
 
   private async startRealtimeTranscription(
@@ -449,9 +525,9 @@ export class RealtimeCapture {
 
     this.realtimeChannel = this.peerConnection.createDataChannel("oai-events");
     this.realtimeChannel.addEventListener("open", () => {
-      this.recordTranslationChannelOpenTiming();
       this.callbacks.onState("Live");
       this.callbacks.onLog("Realtime translation is running.");
+      this.startWebRtcStatsLogging();
     });
     this.realtimeChannel.addEventListener("message", (event) => {
       this.handleRealtimeTranslationEvent(JSON.parse(event.data) as RealtimeEvent);
@@ -504,7 +580,7 @@ export class RealtimeCapture {
       analyser.getByteFrequencyData(levels);
       const peak = Math.max(...levels);
       const level = peak / 255;
-      this.recordAudioLevelTiming(level);
+      this.recordAudioLevelMetrics(level);
       this.callbacks.onMeter(Math.min(100, Math.round(level * 100)));
       this.meterFrame = requestAnimationFrame(tick);
     };
@@ -522,7 +598,7 @@ export class RealtimeCapture {
 
   private cleanup(): void {
     if (this.transcriptionCommitTimer) clearTimeout(this.transcriptionCommitTimer);
-    this.clearTimingTimers();
+    this.clearMetricsTimers();
     this.peerConnection?.getSenders().forEach((sender) => sender.track?.stop());
     this.transcriptionPeerConnection?.getSenders().forEach((sender) => sender.track?.stop());
     this.realtimeChannel?.close();
@@ -544,7 +620,7 @@ export class RealtimeCapture {
     this.peerConnection = null;
     this.transcriptionPeerConnection = null;
     this.eventState = createRealtimeEventState();
-    this.timing = null;
+    this.metrics = null;
   }
 
   private stopSharedMedia(): void {

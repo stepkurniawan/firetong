@@ -194,6 +194,19 @@
     return transcriptionRate + translationRate;
   }
 
+  function logLatency(metric: string, details: Record<string, unknown>): void {
+    console.info("[firetong:latency]", {
+      metric,
+      ...details,
+    });
+  }
+
+  function nextAnimationFrame(): Promise<void> {
+    return new Promise((resolve) => {
+      requestAnimationFrame(() => resolve());
+    });
+  }
+
   function updateMeter(levelPercent: number): void {
     meterLevel = levelPercent;
     if (levelPercent > ACTIVE_AUDIO_THRESHOLD) {
@@ -269,6 +282,16 @@
     if (translatedTextarea) translatedTextarea.scrollTop = translatedTextarea.scrollHeight;
   }
 
+  async function recordTranslationRenderDelay(startedAt: number, delta: string): Promise<void> {
+    await scrollTranscriptAreas();
+    await nextAnimationFrame();
+    logLatency("translation_delta_ui_render_delay", {
+      duration_ms: Math.round(performance.now() - startedAt),
+      delta_length: delta.length,
+      transcript_chars: translatedTranscript.length,
+    });
+  }
+
   function resetRealtimeState(): void {
     sourceTranscript = sourceTranscript.trim();
     translatedTranscript = translatedTranscript.trim();
@@ -285,8 +308,9 @@
   function appendTranslatedText(delta: string): void {
     if (!delta) return;
 
+    const renderStartedAt = performance.now();
     translatedTranscript = `${translatedTranscript}${delta}`;
-    void scrollTranscriptAreas();
+    void recordTranslationRenderDelay(renderStartedAt, delta);
   }
 
   function buildCapture(): RealtimeCapture {
