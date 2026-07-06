@@ -22,7 +22,22 @@ type CaptureCallbacks = {
   onTranslationDelta(delta: string): void;
 };
 
-const TRANSCRIPTION_COMMIT_IDLE_MS = 900;
+const TRANSCRIPTION_COMMIT_IDLE_MS = 600;
+const AUDIO_DETECTED_LEVEL = 0.03;
+const SPOKEN_PHRASE_SILENCE_MS = 700;
+const TRANSLATION_SETTLED_MS = 900;
+
+type RealtimeTimingState = {
+  startedAt: number;
+  firstAudioDetectedAt: number | null;
+  firstTranslationDeltaAt: number | null;
+  isSpeaking: boolean;
+  lastSpeechAt: number | null;
+  pendingPhraseEndedAt: number | null;
+  phraseEndedTimer: number | null;
+  translationSettledTimer: number | null;
+  phraseCount: number;
+};
 
 export type AudioCaptureMode = "desktop" | "microphone";
 
@@ -49,6 +64,7 @@ export class RealtimeCapture {
   private transcriptionPeerConnected = false;
   private lastTranscriptionCommitBytesSent = 0;
   private eventState: RealtimeEventState = createRealtimeEventState();
+  private timing: RealtimeTimingState | null = null;
 
   constructor(
     private readonly config: AppConfig,
@@ -56,6 +72,7 @@ export class RealtimeCapture {
   ) {}
 
   async start(options: AudioCaptureOptions): Promise<void> {
+    this.resetTiming();
     this.stream = await this.captureAudio(options);
 
     const audioTracks = this.stream.getAudioTracks();
@@ -225,7 +242,126 @@ export class RealtimeCapture {
   }
 
   private handleRealtimeTranslationEvent(event: RealtimeEvent): void {
+    if (event.type === "session.output_transcript.delta") {
+      this.recordTranslationDeltaTiming();
+    }
     applyRealtimeTranslationEvent(event, this.eventState, this.callbacks);
+  }
+
+  private resetTiming(): void {
+    this.clearTimingTimers();
+    this.timing = {
+      startedAt: performance.now(),
+      firstAudioDetectedAt: null,
+      firstTranslationDeltaAt: null,
+      isSpeaking: false,
+      lastSpeechAt: null,
+      pendingPhraseEndedAt: null,
+      phraseEndedTimer: null,
+      translationSettledTimer: null,
+      phraseCount: 0,
+    };
+  }
+
+  private clearTimingTimers(): void {
+    if (this.timing?.phraseEndedTimer) clearTimeout(this.timing.phraseEndedTimer);
+    if (this.timing?.translationSettledTimer) clearTimeout(this.timing.translationSettledTimer);
+  }
+
+  private logTiming(metric: string, durationMs: number, details: Record<string, unknown> = {}): void {
+    console.info("[firetong:latency]", {
+      metric,
+      duration_ms: Math.round(durationMs),
+      ...details,
+    });
+  }
+
+  private recordTranslationChannelOpenTiming(): void {
+    if (!this.timing) return;
+    this.logTiming(
+      "start_to_translation_channel_open",
+      performance.now() - this.timing.startedAt,
+    );
+  }
+
+  private recordAudioLevelTiming(level: number): void {
+    if (!this.timing) return;
+
+    const now = performance.now();
+    const hasSpeech = level >= AUDIO_DETECTED_LEVEL;
+
+    if (hasSpeech && this.timing.firstAudioDetectedAt === null) {
+      this.timing.firstAudioDetectedAt = now;
+      this.logTiming("start_to_first_audio_detected", now - this.timing.startedAt, {
+        audio_level: Number(level.toFixed(3)),
+      });
+    }
+
+    if (hasSpeech) {
+      if (!this.timing.isSpeaking) {
+        this.timing.isSpeaking = true;
+        this.timing.phraseCount += 1;
+        this.timing.pendingPhraseEndedAt = null;
+        if (this.timing.translationSettledTimer) {
+          clearTimeout(this.timing.translationSettledTimer);
+          this.timing.translationSettledTimer = null;
+        }
+      }
+
+      this.timing.lastSpeechAt = now;
+      if (this.timing.phraseEndedTimer) {
+        clearTimeout(this.timing.phraseEndedTimer);
+        this.timing.phraseEndedTimer = null;
+      }
+      return;
+    }
+
+    if (!this.timing.isSpeaking || this.timing.phraseEndedTimer || this.timing.lastSpeechAt === null) {
+      return;
+    }
+
+    this.timing.phraseEndedTimer = window.setTimeout(() => {
+      if (!this.timing?.lastSpeechAt) return;
+
+      this.timing.isSpeaking = false;
+      this.timing.pendingPhraseEndedAt = this.timing.lastSpeechAt;
+      this.timing.phraseEndedTimer = null;
+      this.scheduleTranslationSettledTiming();
+    }, SPOKEN_PHRASE_SILENCE_MS);
+  }
+
+  private recordTranslationDeltaTiming(): void {
+    if (!this.timing) return;
+
+    const now = performance.now();
+    if (this.timing.firstTranslationDeltaAt === null) {
+      this.timing.firstTranslationDeltaAt = now;
+      if (this.timing.firstAudioDetectedAt !== null) {
+        this.logTiming(
+          "first_audio_to_first_translation_delta",
+          now - this.timing.firstAudioDetectedAt,
+        );
+      }
+    }
+
+    this.scheduleTranslationSettledTiming();
+  }
+
+  private scheduleTranslationSettledTiming(): void {
+    if (!this.timing?.pendingPhraseEndedAt) return;
+
+    if (this.timing.translationSettledTimer) clearTimeout(this.timing.translationSettledTimer);
+    this.timing.translationSettledTimer = window.setTimeout(() => {
+      if (!this.timing?.pendingPhraseEndedAt) return;
+
+      this.logTiming(
+        "spoken_phrase_end_to_translation_settled",
+        performance.now() - this.timing.pendingPhraseEndedAt,
+        { phrase: this.timing.phraseCount },
+      );
+      this.timing.pendingPhraseEndedAt = null;
+      this.timing.translationSettledTimer = null;
+    }, TRANSLATION_SETTLED_MS);
   }
 
   private async startRealtimeTranscription(
@@ -313,6 +449,7 @@ export class RealtimeCapture {
 
     this.realtimeChannel = this.peerConnection.createDataChannel("oai-events");
     this.realtimeChannel.addEventListener("open", () => {
+      this.recordTranslationChannelOpenTiming();
       this.callbacks.onState("Live");
       this.callbacks.onLog("Realtime translation is running.");
     });
@@ -367,6 +504,7 @@ export class RealtimeCapture {
       analyser.getByteFrequencyData(levels);
       const peak = Math.max(...levels);
       const level = peak / 255;
+      this.recordAudioLevelTiming(level);
       this.callbacks.onMeter(Math.min(100, Math.round(level * 100)));
       this.meterFrame = requestAnimationFrame(tick);
     };
@@ -384,6 +522,7 @@ export class RealtimeCapture {
 
   private cleanup(): void {
     if (this.transcriptionCommitTimer) clearTimeout(this.transcriptionCommitTimer);
+    this.clearTimingTimers();
     this.peerConnection?.getSenders().forEach((sender) => sender.track?.stop());
     this.transcriptionPeerConnection?.getSenders().forEach((sender) => sender.track?.stop());
     this.realtimeChannel?.close();
@@ -405,6 +544,7 @@ export class RealtimeCapture {
     this.peerConnection = null;
     this.transcriptionPeerConnection = null;
     this.eventState = createRealtimeEventState();
+    this.timing = null;
   }
 
   private stopSharedMedia(): void {
