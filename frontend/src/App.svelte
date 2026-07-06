@@ -94,7 +94,7 @@
         : `${formatDuration(elapsedSessionSeconds)} at the current realtime rates.`
       : lastSavedSessionCost?.estimated_total_usd !== null && lastSavedSessionCost
         ? "Final estimate saved with the transcript metadata."
-        : "Start a session to see the estimated realtime cost here.";
+        : "Start a session to see the estimated realtime cost here. It has been paid gracefully.";
 
   const supportUrl = "https://paypal.me/stepkurniawan";
   const feedbackEmail = "stepkurniawan.learn@gmail.com";
