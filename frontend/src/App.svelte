@@ -16,6 +16,11 @@
   import LiveStatus, { type LiveStatusKind } from "./LiveStatus.svelte";
   import LiveTranslationControls from "./LiveTranslationControls.svelte";
   import { RealtimeCapture, type AudioCaptureMode } from "./realtime";
+  import {
+    canOpenSubtitleOverlay,
+    SubtitleOverlay,
+    SUBTITLE_PIP_UNSUPPORTED_MESSAGE,
+  } from "./subtitle-overlay";
   import TranscriptPanels from "./TranscriptPanels.svelte";
   import {
     saveTranscriptSession,
@@ -62,10 +67,12 @@
   let elapsedSessionSeconds = 0;
   let lastSavedSessionCost: TranscriptSessionCost | null = null;
   let inputTranscriptEnabled = false;
+  let subtitleModeEnabled = false;
   let feedbackDialog: HTMLDialogElement | null = null;
   let feedbackText = "";
   let feedbackSubmitting = false;
   let feedbackError = "";
+  const subtitleOverlay = new SubtitleOverlay();
 
   $: if (inputLanguage === outputLanguage && !captureActive) {
     outputLanguage = firstDifferentRealtimeLanguage(inputLanguage, realtimeLanguageOptions);
@@ -113,6 +120,7 @@
 
     return () => {
       window.clearInterval(silenceTimer);
+      subtitleOverlay.close();
     };
   });
 
@@ -295,6 +303,7 @@
   function resetRealtimeState(): void {
     sourceTranscript = sourceTranscript.trim();
     translatedTranscript = translatedTranscript.trim();
+    subtitleOverlay.update(translatedTranscript);
     void scrollTranscriptAreas();
   }
 
@@ -310,6 +319,7 @@
 
     const renderStartedAt = performance.now();
     translatedTranscript = `${translatedTranscript}${delta}`;
+    subtitleOverlay.update(translatedTranscript);
     void recordTranslationRenderDelay(renderStartedAt, delta);
   }
 
@@ -346,6 +356,10 @@
       setStatus("error", `${sourceLabel} audio capture is unavailable.`);
       return;
     }
+    if (subtitleModeEnabled && !canOpenSubtitleOverlay()) {
+      setStatus("unsupported", SUBTITLE_PIP_UNSUPPORTED_MESSAGE);
+      return;
+    }
 
     setStatus("connecting", "Requesting audio capture and connecting realtime sessions.");
     lastAudioInputAt = Date.now();
@@ -353,18 +367,23 @@
     elapsedSessionSeconds = 0;
     lastSavedSessionCost = null;
     capture = buildCapture();
+    const subtitleOpenPromise = subtitleModeEnabled
+      ? subtitleOverlay.open(translatedTranscript)
+      : Promise.resolve();
+    const captureStartPromise = capture.start({
+      inputTranscriptEnabled,
+      inputLanguage,
+      mode: audioCaptureMode,
+      microphoneDeviceId: selectedAudioInputId,
+      outputLanguage,
+    });
     try {
-      await capture.start({
-        inputTranscriptEnabled,
-        inputLanguage,
-        mode: audioCaptureMode,
-        microphoneDeviceId: selectedAudioInputId,
-        outputLanguage,
-      });
+      await Promise.all([subtitleOpenPromise, captureStartPromise]);
       sessionStartedAt = new Date().toISOString();
       updateElapsedSessionSeconds();
       void refreshAudioInputOptions();
     } catch (error) {
+      subtitleOverlay.close();
       captureActive = false;
       capture = null;
       sessionStartedAt = null;
@@ -384,6 +403,7 @@
     const endedAt = new Date().toISOString();
 
     capture?.stop();
+    subtitleOverlay.close();
     capture = null;
     sessionStartedAt = null;
     elapsedSessionSeconds = 0;
@@ -552,6 +572,7 @@
       bind:inputLanguage
       bind:outputLanguage
       bind:selectedAudioInputId
+      bind:subtitleModeEnabled
       {audioInputOptions}
       {browserSupported}
       {captureActive}

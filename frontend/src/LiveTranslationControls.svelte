@@ -17,6 +17,7 @@
   export let outputLanguage: RealtimeLanguage = "en";
   export let realtimeLanguageOptions: RealtimeLanguageOption[] = [];
   export let selectedAudioInputId = "default";
+  export let subtitleModeEnabled = false;
 
   export let refreshAudioInputOptions: () => void | Promise<void>;
   export let startCapture: () => void | Promise<void>;
@@ -95,6 +96,14 @@
         disabled={captureActive || capturePending}
       />
       <span>Input transcript</span>
+    </label>
+    <label class="input-transcript-toggle">
+      <input
+        type="checkbox"
+        bind:checked={subtitleModeEnabled}
+        disabled={captureActive || capturePending}
+      />
+      <span>Subtitle mode</span>
     </label>
     {#if audioCaptureMode === "microphone"}
       <button
