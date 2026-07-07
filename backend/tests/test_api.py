@@ -146,7 +146,7 @@ def test_realtime_token_route_creates_transcription_session(monkeypatch):
                     "transcription": {
                         "model": "gpt-realtime-whisper",
                         "language": "en",
-                        "delay": "low",
+                        "delay": "minimal",
                         "prompt": "Transcribe English (en) for listeners using German (de).",
                     },
                     "turn_detection": None,
