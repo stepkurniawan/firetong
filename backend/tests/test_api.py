@@ -39,6 +39,7 @@ def test_config_reports_openai_model_defaults():
             {"value": "id", "label": "Indonesian"},
             {"value": "en", "label": "English"},
             {"value": "de", "label": "German"},
+            {"value": "ja", "label": "Japanese"},
         ],
         "realtime_duration_rates_usd_per_minute": REALTIME_DURATION_RATES_USD_PER_MINUTE,
     }
@@ -179,13 +180,17 @@ def test_realtime_token_routes_reject_unsupported_languages(monkeypatch):
     translation_response = client.get("/api/realtime/translation-token?output_language=fr")
 
     assert transcription_response.status_code == 422
-    assert transcription_response.json() == {"detail": "input_language must be one of: id, en, de."}
+    assert transcription_response.json() == {
+        "detail": "input_language must be one of: id, en, de, ja."
+    }
     assert transcription_output_response.status_code == 422
     assert transcription_output_response.json() == {
-        "detail": "output_language must be one of: id, en, de."
+        "detail": "output_language must be one of: id, en, de, ja."
     }
     assert translation_response.status_code == 422
-    assert translation_response.json() == {"detail": "output_language must be one of: id, en, de."}
+    assert translation_response.json() == {
+        "detail": "output_language must be one of: id, en, de, ja."
+    }
     app.dependency_overrides.clear()
 
 

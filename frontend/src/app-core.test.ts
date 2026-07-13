@@ -53,6 +53,7 @@ test("firstDifferentRealtimeLanguage returns a different supported language", ()
   assert.notEqual(firstDifferentRealtimeLanguage("id"), "id");
   assert.notEqual(firstDifferentRealtimeLanguage("en"), "en");
   assert.notEqual(firstDifferentRealtimeLanguage("de"), "de");
+  assert.notEqual(firstDifferentRealtimeLanguage("ja"), "ja");
 });
 
 test("buildRealtimeLanguageUrl can include both realtime language params", () => {

@@ -14,6 +14,7 @@ def test_browser_core_defaults_are_defined_for_runtime_config():
     assert "realtime_language_options: FALLBACK_REALTIME_LANGUAGE_OPTIONS" in app_core
     assert "realtime_duration_rates_usd_per_minute" in app_core
     assert 'value: "de", label: "German"' in app_core
+    assert 'value: "ja", label: "Japanese"' in app_core
 
 
 def test_browser_core_feature_check_reports_capture_prerequisites():

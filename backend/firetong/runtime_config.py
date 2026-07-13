@@ -24,6 +24,7 @@ REALTIME_LANGUAGE_OPTIONS = (
     {"value": "id", "label": "Indonesian"},
     {"value": "en", "label": "English"},
     {"value": "de", "label": "German"},
+    {"value": "ja", "label": "Japanese"},
 )
 SUPPORTED_REALTIME_LANGUAGES = tuple(option["value"] for option in REALTIME_LANGUAGE_OPTIONS)
 REALTIME_LANGUAGE_NAMES = {option["value"]: option["label"] for option in REALTIME_LANGUAGE_OPTIONS}

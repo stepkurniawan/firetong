@@ -19,6 +19,7 @@ const FALLBACK_REALTIME_LANGUAGE_OPTIONS: RealtimeLanguageOption[] = [
   { value: "id", label: "Indonesian" },
   { value: "en", label: "English" },
   { value: "de", label: "German" },
+  { value: "ja", label: "Japanese" },
 ] as const;
 export type RealtimeLanguageParam = "input_language" | "output_language";
 
