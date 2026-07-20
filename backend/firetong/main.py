@@ -11,7 +11,6 @@ from backend.firetong.runtime_config import (
     REALTIME_DURATION_RATES_USD_PER_MINUTE,
     REALTIME_LANGUAGE_OPTIONS,
     SUPPORTED_REALTIME_LANGUAGES,
-    render_transcription_prompt,
 )
 from backend.firetong.schemas import (
     AppConfig,
@@ -157,11 +156,6 @@ async def create_realtime_token(
         "output_language",
     )
     ensure_distinct_realtime_languages(selected_input_language, selected_output_language)
-    transcription_prompt = render_transcription_prompt(
-        settings.transcription_prompt,
-        selected_input_language,
-        selected_output_language,
-    )
 
     response = await post_to_openai(
         settings,
@@ -176,7 +170,6 @@ async def create_realtime_token(
                             "model": settings.transcription_model,
                             "language": selected_input_language,
                             "delay": settings.realtime_transcription_delay,
-                            "prompt": transcription_prompt,
                         },
                         "turn_detection": None,
                     }

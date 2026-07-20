@@ -42,8 +42,8 @@ Open http://127.0.0.1:5173. Vite serves the Svelte app with hot reload and
 proxies `/api` requests to FastAPI on http://127.0.0.1:8000, so frontend edits do
 not require `npm run build`.
 
-To verify the production static app locally, run `npm run build`, then
-`./start.sh`, and open http://127.0.0.1:8000.
+To verify the production static app locally, run `./start.sh` and open
+http://127.0.0.1:8000. The script rebuilds the frontend before starting FastAPI.
 
 ## Run with Docker Compose
 

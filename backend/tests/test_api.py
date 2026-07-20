@@ -126,10 +126,6 @@ def test_realtime_token_route_creates_transcription_session(monkeypatch):
     monkeypatch.setattr("backend.firetong.main.post_to_openai", fake_post_to_openai)
     app.dependency_overrides[get_settings] = override_settings(
         openai_api_key="test-key",
-        transcription_prompt=(
-            "Transcribe {{ input_language_name }} ({{ input_language }}) for listeners using "
-            "{{ output_language_name }} ({{ output_language }})."
-        ),
     )
     client = TestClient(app)
 
@@ -148,7 +144,6 @@ def test_realtime_token_route_creates_transcription_session(monkeypatch):
                         "model": "gpt-realtime-whisper",
                         "language": "en",
                         "delay": "minimal",
-                        "prompt": "Transcribe English (en) for listeners using German (de).",
                     },
                     "turn_detection": None,
                 }

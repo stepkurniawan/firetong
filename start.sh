@@ -1,4 +1,8 @@
 #!/usr/bin/env sh
+set -e
+
+npm run build
+
 uv run uvicorn backend.firetong.main:app \
   --host 127.0.0.1 \
   --port 8000 \

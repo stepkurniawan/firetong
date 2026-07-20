@@ -40,3 +40,12 @@ test("latestSubtitleText limits a long subtitle sentence", () => {
     "six seven eight nine",
   );
 });
+
+test("latestSubtitleText keeps no more than 20 words by default", () => {
+  assert.equal(
+    latestSubtitleText(
+      "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twenty-one",
+    ),
+    "two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twenty-one",
+  );
+});

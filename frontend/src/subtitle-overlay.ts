@@ -1,5 +1,5 @@
 const DEFAULT_SUBTITLE_TEXT = "Waiting for translation...";
-const MAX_SUBTITLE_WORDS = 28;
+const MAX_SUBTITLE_WORDS = 20;
 const MIN_SUBTITLE_FONT_SIZE_PX = 16;
 const PUNCTUATION = new Set([".", "!", "?", "。", "！", "？"]);
 
@@ -201,7 +201,7 @@ function renderSubtitleDocument(documentToRender: Document): HTMLElement {
       margin: 0;
       overflow: hidden;
       color: #ffffff;
-      font-size: clamp(24px, min(8vw, 22vh), 72px);
+      font-size: max(16px, 30vh);
       font-weight: 760;
       line-height: 1.12;
       overflow-wrap: anywhere;
