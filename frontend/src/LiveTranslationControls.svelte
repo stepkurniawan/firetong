@@ -38,6 +38,12 @@
     void startCapture();
   }
 
+  function swapLanguages(): void {
+    const previousInputLanguage = inputLanguage;
+    inputLanguage = outputLanguage;
+    outputLanguage = previousInputLanguage;
+  }
+
   $: captureButtonLabel = captureActive
     ? "Stop translation"
     : capturePending
@@ -76,6 +82,16 @@
           {/each}
         </select>
       </label>
+      <button
+        type="button"
+        class="secondary swap-language-button"
+        onclick={swapLanguages}
+        disabled={captureActive}
+        aria-label="Swap input and output languages"
+        title="Swap input and output languages"
+      >
+        ↔
+      </button>
       <label class="control-field language-field">
         <span>Output language</span>
         <select bind:value={outputLanguage} disabled={captureActive}>

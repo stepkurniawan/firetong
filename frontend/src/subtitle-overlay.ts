@@ -1,5 +1,6 @@
 const DEFAULT_SUBTITLE_TEXT = "Waiting for translation...";
 const MAX_SUBTITLE_WORDS = 28;
+const MIN_SUBTITLE_FONT_SIZE_PX = 16;
 const PUNCTUATION = new Set([".", "!", "?", "。", "！", "？"]);
 
 type DocumentPictureInPictureApi = {
@@ -77,6 +78,7 @@ function getDocumentPictureInPicture(
 export class SubtitleOverlay {
   private subtitleWindow: Window | null = null;
   private subtitleTextElement: HTMLElement | null = null;
+  private fitFrame: number | null = null;
 
   async open(initialText = ""): Promise<void> {
     if (!canOpenSubtitleOverlay()) {
@@ -95,11 +97,13 @@ export class SubtitleOverlay {
 
     this.subtitleWindow = subtitleWindow;
     this.subtitleTextElement = renderSubtitleDocument(subtitleWindow.document);
+    subtitleWindow.addEventListener("resize", () => this.scheduleFit());
     subtitleWindow.addEventListener("pagehide", () => {
       if (this.subtitleWindow !== subtitleWindow) return;
 
       this.subtitleWindow = null;
       this.subtitleTextElement = null;
+      this.fitFrame = null;
     });
     this.update(initialText);
   }
@@ -110,13 +114,51 @@ export class SubtitleOverlay {
     const subtitle = latestSubtitleText(transcriptText);
     this.subtitleTextElement.textContent = subtitle || DEFAULT_SUBTITLE_TEXT;
     this.subtitleTextElement.classList.toggle("is-placeholder", !subtitle);
+    this.scheduleFit();
   }
 
   close(): void {
     const currentWindow = this.subtitleWindow;
+    if (currentWindow && this.fitFrame !== null) {
+      currentWindow.cancelAnimationFrame(this.fitFrame);
+    }
     this.subtitleWindow = null;
     this.subtitleTextElement = null;
+    this.fitFrame = null;
     if (currentWindow && !currentWindow.closed) currentWindow.close();
+  }
+
+  private scheduleFit(): void {
+    const subtitleWindow = this.subtitleWindow;
+    const subtitleTextElement = this.subtitleTextElement;
+    if (!subtitleWindow || !subtitleTextElement) return;
+
+    if (this.fitFrame !== null) subtitleWindow.cancelAnimationFrame(this.fitFrame);
+    this.fitFrame = subtitleWindow.requestAnimationFrame(() => {
+      this.fitFrame = null;
+      if (
+        this.subtitleWindow !== subtitleWindow ||
+        this.subtitleTextElement !== subtitleTextElement
+      ) {
+        return;
+      }
+      fitSubtitleText(subtitleWindow, subtitleTextElement);
+    });
+  }
+}
+
+function fitSubtitleText(subtitleWindow: Window, subtitleTextElement: HTMLElement): void {
+  subtitleTextElement.style.removeProperty("font-size");
+  let fontSize = Number.parseFloat(
+    subtitleWindow.getComputedStyle(subtitleTextElement).fontSize,
+  );
+
+  while (
+    subtitleTextElement.scrollHeight > subtitleTextElement.clientHeight + 1 &&
+    fontSize > MIN_SUBTITLE_FONT_SIZE_PX
+  ) {
+    fontSize = Math.max(MIN_SUBTITLE_FONT_SIZE_PX, fontSize - 2);
+    subtitleTextElement.style.fontSize = `${fontSize}px`;
   }
 }
 
