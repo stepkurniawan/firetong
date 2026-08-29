@@ -173,6 +173,13 @@ def test_transcript_panels_keep_fixed_height_and_scroll_internally():
     assert "translatedTextarea.scrollTop = translatedTextarea.scrollHeight" in app_svelte
 
 
+def test_subtitle_font_size_tracks_picture_in_picture_window_size():
+    subtitle_overlay = (SRC_DIR / "subtitle-overlay.ts").read_text()
+
+    assert "font-size: 30vh;" in subtitle_overlay
+    assert "fitSubtitleText" not in subtitle_overlay
+
+
 def test_browser_app_commits_transcription_audio_buffers():
     _, realtime_ts, _, _ = read_frontend_source()
 
