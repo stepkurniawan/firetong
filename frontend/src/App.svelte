@@ -22,10 +22,7 @@
     SUBTITLE_PIP_UNSUPPORTED_MESSAGE,
   } from "./subtitle-overlay";
   import TranscriptPanels from "./TranscriptPanels.svelte";
-  import {
-    saveTranscriptSession,
-    type TranscriptSessionCost,
-  } from "./transcript-sessions";
+  import { formatTranscriptDownload, saveTranscriptSession } from "./transcript-sessions";
   import {
     formatDuration,
     formatUsd,
@@ -65,8 +62,9 @@
   let noAudioDetected = false;
   let sessionStartedAt: string | null = null;
   let elapsedSessionSeconds = 0;
-  let lastSavedSessionCost: TranscriptSessionCost | null = null;
+  let lastSessionCostUsd: number | null = null;
   let inputTranscriptEnabled = false;
+  let saveOnServer = false;
   let subtitleModeEnabled = false;
   let feedbackDialog: HTMLDialogElement | null = null;
   let feedbackText = "";
@@ -91,7 +89,7 @@
   $: displayedSessionCostUsd =
     captureActive && sessionStartedAt
       ? estimateSessionCostUsd(elapsedSessionSeconds)
-      : lastSavedSessionCost?.estimated_total_usd ?? null;
+      : lastSessionCostUsd;
   $: sessionCostTitle = captureActive ? "Current session estimate" : "Last session cost";
   $: sessionCostValue = formatUsd(displayedSessionCostUsd);
   $: sessionCostNote =
@@ -99,8 +97,8 @@
       ? realtimeSessionRateUsdPerMinute() === null
         ? "Current model rates are not configured."
         : `${formatDuration(elapsedSessionSeconds)} at the current realtime rates.`
-      : lastSavedSessionCost?.estimated_total_usd !== null && lastSavedSessionCost
-        ? "Final estimate saved with the transcript metadata."
+      : lastSessionCostUsd !== null
+        ? "Estimate for the last session."
         : "Start a session to see the estimated realtime cost here. It has been paid gracefully.";
 
   const supportUrl = "https://paypal.me/stepkurniawan";
@@ -365,7 +363,7 @@
     lastAudioInputAt = Date.now();
     noAudioDetected = false;
     elapsedSessionSeconds = 0;
-    lastSavedSessionCost = null;
+    lastSessionCostUsd = null;
     capture = buildCapture();
     const subtitleOpenPromise = subtitleModeEnabled
       ? subtitleOverlay.open(translatedTranscript)
@@ -401,12 +399,25 @@
     const inputTranscriptEnabledForSession = inputTranscriptEnabled;
     const startedAt = sessionStartedAt;
     const endedAt = new Date().toISOString();
+    const shouldSaveOnServer = saveOnServer;
+
+    lastSessionCostUsd = estimateSessionCostUsd(
+      startedAt ? Math.max(0, (Date.now() - Date.parse(startedAt)) / 1000) : 0,
+    );
 
     capture?.stop();
     subtitleOverlay.close();
     capture = null;
     sessionStartedAt = null;
     elapsedSessionSeconds = 0;
+
+    if (!shouldSaveOnServer) {
+      setStatus(
+        "stopped",
+        "Capture stopped. Transcripts were not saved on the server. Download them to keep a copy.",
+      );
+      return;
+    }
 
     try {
       const data = await saveTranscriptSession({
@@ -422,7 +433,7 @@
         return;
       }
 
-      lastSavedSessionCost = data?.cost ?? null;
+      lastSessionCostUsd = data.cost?.estimated_total_usd ?? lastSessionCostUsd;
       setStatus(
         "stopped",
         `Capture stopped. Session transcripts saved to ${data.directory || "the save folder"}.`,
@@ -435,6 +446,26 @@
         }`,
       );
     }
+  }
+
+  function downloadTranscripts(): void {
+    const content = formatTranscriptDownload(
+      inputTranscriptEnabled ? sourceTranscript : "",
+      translatedTranscript,
+      inputLanguageLabel,
+      outputLanguageLabel,
+    );
+    if (!content) return;
+
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `firetong-transcripts-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
   async function testServerConnection(): Promise<void> {
@@ -572,6 +603,7 @@
       bind:inputLanguage
       bind:outputLanguage
       bind:selectedAudioInputId
+      bind:saveOnServer
       bind:subtitleModeEnabled
       {audioInputOptions}
       {browserSupported}
@@ -606,6 +638,17 @@
     bind:translatedTranscript
     translatedLanguageLabel={outputLanguageLabel}
   />
+
+  <div class="transcript-actions">
+    <button
+      type="button"
+      class="secondary"
+      onclick={downloadTranscripts}
+      disabled={!(inputTranscriptEnabled && sourceTranscript.trim()) && !translatedTranscript.trim()}
+    >
+      Download transcript and translation
+    </button>
+  </div>
 
   <dialog class="feedback-dialog" aria-labelledby="feedback-title" bind:this={feedbackDialog}>
     <form class="feedback-form" method="dialog" onsubmit={submitFeedback}>
@@ -659,8 +702,8 @@
         next sermon.
       </p>
       <p>
-        Audio is streamed to an AI provider. Translated output is saved
-        automatically; source-language transcripts are saved only when enabled.
+        Audio is streamed to an AI provider. Transcripts are saved on this server only
+        when you enable server saving. You can download the text to your device at any time.
       </p>
     </div>
     <nav aria-label="Footer links">

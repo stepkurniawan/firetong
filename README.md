@@ -112,9 +112,12 @@ Live translation uses two OpenAI Realtime WebRTC sessions: one reliable transcri
 
 The Python server serves the static app and mints realtime transcription/translation tokens. It does not proxy text translation calls.
 
-When capture stops, the browser sends the current source and translated text to
-the Python server for local autosave. Set `FIRETONG_TRANSCRIPT_SAVE_DIR` to
-choose a different save folder.
+Server transcript saving is off by default. When a visitor checks **Save transcripts
+on FireTong server**, stopping capture sends the translated text and, when input
+transcription is enabled, the source text to the Python server. Visitors can also
+download the available transcript and translation as a text file without enabling
+server saving. Set `FIRETONG_TRANSCRIPT_SAVE_DIR` to choose a different server save
+folder.
 
 Bug reports are sent by the Python server through SMTP. Set
 `FIRETONG_FEEDBACK_SMTP_HOST` and `FIRETONG_FEEDBACK_EMAIL_FROM`, plus

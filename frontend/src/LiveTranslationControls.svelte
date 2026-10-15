@@ -17,6 +17,7 @@
   export let outputLanguage: RealtimeLanguage = "en";
   export let realtimeLanguageOptions: RealtimeLanguageOption[] = [];
   export let selectedAudioInputId = "default";
+  export let saveOnServer = false;
   export let subtitleModeEnabled = false;
 
   export let refreshAudioInputOptions: () => void | Promise<void>;
@@ -120,6 +121,14 @@
         disabled={captureActive || capturePending}
       />
       <span>Subtitle mode</span>
+    </label>
+    <label class="input-transcript-toggle">
+      <input
+        type="checkbox"
+        bind:checked={saveOnServer}
+        disabled={captureActive || capturePending}
+      />
+      <span>Save transcripts on FireTong server</span>
     </label>
     {#if audioCaptureMode === "microphone"}
       <button

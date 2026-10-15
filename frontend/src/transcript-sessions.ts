@@ -31,6 +31,19 @@ export function hasSavedTranscriptContent(sourceText: string, translatedText: st
   return Boolean(sourceText.trim() || translatedText.trim());
 }
 
+export function formatTranscriptDownload(
+  sourceText: string,
+  translatedText: string,
+  inputLanguageLabel: string,
+  outputLanguageLabel: string,
+): string {
+  const sections = [
+    sourceText.trim() ? `Source transcript (${inputLanguageLabel})\n\n${sourceText.trim()}` : "",
+    translatedText.trim() ? `Translation (${outputLanguageLabel})\n\n${translatedText.trim()}` : "",
+  ].filter(Boolean);
+  return sections.length ? `${sections.join("\n\n---\n\n")}\n` : "";
+}
+
 export async function saveTranscriptSession(
   payload: TranscriptSessionSavePayload,
 ): Promise<TranscriptSessionSaveResponse | null> {

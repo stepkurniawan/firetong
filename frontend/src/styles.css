@@ -114,6 +114,7 @@ a {
 .topbar,
 .live-console,
 .panels,
+.transcript-actions,
 .footer {
   width: min(1240px, 100%);
   margin-inline: auto;
@@ -444,6 +445,11 @@ h2 {
 
 .transcript-placeholder {
   color: #7a8695;
+}
+
+.transcript-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .footer {
